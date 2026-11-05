@@ -16,6 +16,7 @@ namespace SEBatchReplace
         private TextBox _logTextBox;
         private Button _revisionReadButton;
         private Button _asmScanButton;
+        private Button _backgroundOpenButton;
         private readonly List<ReplacementMapping> _mappings = new List<ReplacementMapping>();
 
         public MainForm()
@@ -180,6 +181,13 @@ namespace SEBatchReplace
                 Height = 32
             };
             _asmScanButton.Click += ScanAssemblyReferences;
+            _backgroundOpenButton = new Button
+            {
+                Text = "背景開啟測試（不顯示視窗）",
+                Width = 230,
+                Height = 32
+            };
+            _backgroundOpenButton.Click += BackgroundOpenSelectedAssembly;
             var hint = new Label
             {
                 Text = "唯讀二進位掃描；初篩結果需與 Solid Edge 讀取結果比對。",
@@ -188,6 +196,7 @@ namespace SEBatchReplace
             };
             testPanel.Controls.Add(_revisionReadButton);
             testPanel.Controls.Add(_asmScanButton);
+            testPanel.Controls.Add(_backgroundOpenButton);
             testPanel.Controls.Add(hint);
             root.Controls.Add(testPanel, 0, 3);
 
@@ -242,6 +251,59 @@ namespace SEBatchReplace
             {
                 AppendLog("掃描失敗：" + ex.Message);
                 MessageBox.Show(this, ex.Message, "掃描失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void BackgroundOpenSelectedAssembly(object sender, EventArgs e)
+        {
+            if (String.IsNullOrWhiteSpace(_folderTextBox.Text) || !Directory.Exists(_folderTextBox.Text))
+            {
+                MessageBox.Show(this, "請先選擇有效的組立根資料夾。", "尚未選擇資料夾", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            if (_assemblyList.SelectedIndex < 0)
+            {
+                MessageBox.Show(this, "請先在組立清單選取一個測試用 .asm 檔案。", "尚未選取組立", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string relativePath = Convert.ToString(_assemblyList.SelectedItem);
+            string assemblyPath = Path.Combine(_folderTextBox.Text, relativePath);
+            if (!File.Exists(assemblyPath))
+            {
+                MessageBox.Show(this, "找不到選取的組立檔：" + assemblyPath, "檔案不存在", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            _backgroundOpenButton.Enabled = false;
+            UseWaitCursor = true;
+            AppendLog("========== 開始 Solid Edge 背景開啟測試 ==========");
+            AppendLog("[背景測試] " + relativePath);
+            AppendLog("測試模式：隱藏 Solid Edge 主視窗，使用 JDOCUMENTPROP_NOWINDOW=8 開啟組立，不儲存，讀取後關閉。");
+
+            try
+            {
+                IList<string> occurrences = SolidEdgeReader.OpenReadAndCloseAssemblyInBackground(assemblyPath);
+                AppendLog("[背景開啟成功] " + relativePath + "；第一層 occurrence 數量：" + occurrences.Count);
+                foreach (string occurrence in occurrences)
+                    AppendLog("  " + occurrence);
+
+                MessageBox.Show(this,
+                    "背景開啟測試成功。\r\n組立檔：" + relativePath +
+                    "\r\n第一層 occurrence：" + occurrences.Count +
+                    "\r\n\r\n文件已關閉且未儲存。請確認測試期間 Solid Edge 主視窗及組立視窗均未顯示。",
+                    "背景開啟測試成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                AppendLog("[背景開啟失敗] " + GetExceptionDetails(ex).Replace(Environment.NewLine, " | "));
+                MessageBox.Show(this, ex.Message, "背景開啟測試失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                UseWaitCursor = false;
+                _backgroundOpenButton.Enabled = true;
+                AppendLog("========== Solid Edge 背景開啟測試結束 ==========");
             }
         }
 

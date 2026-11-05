@@ -148,7 +148,7 @@ namespace SEBatchReplace
             logGroup.Controls.Add(_logTextBox);
             root.Controls.Add(logGroup, 0, 5);
 
-            AppendLog("目前為介面與掃描骨架，尚未連接 Solid Edge，也不會修改任何組立或零件檔。");
+            AppendLog("目前僅讀取目前作用中的組立結構，不會修改或儲存任何組立或零件檔。");
         }
 
         private void BrowseFolder(object sender, EventArgs e)
@@ -197,9 +197,29 @@ namespace SEBatchReplace
             }
             catch (Exception ex)
             {
-                AppendLog("讀取失敗：" + ex.Message);
-                MessageBox.Show(this, ex.Message, "Solid Edge 讀取失敗", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                string details = GetExceptionDetails(ex);
+                AppendLog("讀取失敗： " + details);
+                MessageBox.Show(this, details, "Solid Edge 讀取失敗（診斷資訊）", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
+        }
+
+        private static string GetExceptionDetails(Exception exception)
+        {
+            var details = new System.Text.StringBuilder();
+            Exception current = exception;
+            int level = 0;
+            while (current != null)
+            {
+                if (level > 0)
+                    details.AppendLine();
+                details.Append("例外 ").Append(level + 1).Append("：")
+                    .Append(current.GetType().FullName).AppendLine();
+                details.Append("訊息：").AppendLine(current.Message);
+                details.Append("HRESULT：0x").Append(current.HResult.ToString("X8"));
+                current = current.InnerException;
+                level++;
+            }
+            return details.ToString();
         }
 
         private void AddMapping(object sender, EventArgs e)

@@ -19,6 +19,7 @@ namespace SEBatchReplace
         private Button _backgroundOpenButton;
         private Button _apiProbeButton;
         private Button _singleReplaceTestButton;
+        private Button _occurrenceListButton;
         private readonly List<ReplacementMapping> _mappings = new List<ReplacementMapping>();
 
         public MainForm()
@@ -204,6 +205,13 @@ namespace SEBatchReplace
                 Height = 32
             };
             _singleReplaceTestButton.Click += SingleOccurrenceReplaceTest;
+            _occurrenceListButton = new Button
+            {
+                Text = "列出第一層 occurrence（唯讀）",
+                Width = 230,
+                Height = 32
+            };
+            _occurrenceListButton.Click += ListFirstLevelOccurrences;
             var hint = new Label
             {
                 Text = "使用測試副本；單一替換測試不儲存。",
@@ -215,6 +223,7 @@ namespace SEBatchReplace
             testPanel.Controls.Add(_backgroundOpenButton);
             testPanel.Controls.Add(_apiProbeButton);
             testPanel.Controls.Add(_singleReplaceTestButton);
+            testPanel.Controls.Add(_occurrenceListButton);
             testPanel.Controls.Add(hint);
             root.Controls.Add(testPanel, 0, 3);
 
@@ -372,6 +381,60 @@ namespace SEBatchReplace
                 UseWaitCursor = false;
                 _apiProbeButton.Enabled = true;
                 AppendLog("========== Solid Edge COM API 成員診斷結束 ==========");
+            }
+        }
+
+
+        private void ListFirstLevelOccurrences(object sender, EventArgs e)
+        {
+            if (String.IsNullOrWhiteSpace(_folderTextBox.Text) || !Directory.Exists(_folderTextBox.Text))
+            {
+                MessageBox.Show(this, "請先選擇有效的組立根資料夾。", "尚未選擇資料夾", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            if (_assemblyList.SelectedIndex < 0)
+            {
+                MessageBox.Show(this, "請先選取測試用 .asm 檔案。", "尚未選取組立", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            if (_mappingList.SelectedIndex < 0 || _mappingList.SelectedIndex >= _mappings.Count)
+            {
+                MessageBox.Show(this, "請先選取要比對的舊零件配對。", "尚未選取配對", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string relativePath = Convert.ToString(_assemblyList.SelectedItem);
+            string assemblyPath = Path.Combine(_folderTextBox.Text, relativePath);
+            ReplacementMapping mapping = _mappings[_mappingList.SelectedIndex];
+            if (!File.Exists(assemblyPath))
+            {
+                MessageBox.Show(this, "找不到選取的組立檔：" + assemblyPath, "檔案不存在", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            _occurrenceListButton.Enabled = false;
+            UseWaitCursor = true;
+            AppendLog("========== 開始第一層 occurrence 唯讀診斷 ==========");
+            AppendLog("[診斷組立] " + relativePath);
+            AppendLog("[比對舊零件] " + mapping.OldPartName);
+            AppendLog("[唯讀] 不呼叫 Replace、不修改、不儲存。");
+            try
+            {
+                IList<string> lines = SolidEdgeReader.ListFirstLevelOccurrencesInBackground(assemblyPath, mapping.OldPartName);
+                foreach (string line in lines) AppendLog(line);
+                MessageBox.Show(this, "第一層 occurrence 診斷完成。結果已寫入作業紀錄；本次未修改或儲存任何檔案。",
+                    "診斷完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                AppendLog("[occurrence 診斷失敗] " + GetExceptionDetails(ex).Replace(Environment.NewLine, " | "));
+                MessageBox.Show(this, ex.Message, "occurrence 診斷失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                UseWaitCursor = false;
+                _occurrenceListButton.Enabled = true;
+                AppendLog("========== 第一層 occurrence 唯讀診斷結束 ==========");
             }
         }
 

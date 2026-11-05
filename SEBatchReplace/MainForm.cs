@@ -642,17 +642,10 @@ namespace SEBatchReplace
             }
 
             DialogResult confirmation = MessageBox.Show(this,
-                "這項測試會以背景模式開啟選取的組立，完全不執行零件替換，只單獨呼叫 AssemblyDocument.Save()。
-" +
-                "Save 成功或失敗都能幫助判斷：問題是否在背景開啟模式本身。
-
-" +
-                "請選擇已複製的測試副本。雖然不修改模型，但 Save 仍可能更新檔案資訊。
-
-組立檔：" + assemblyPath +
-                "
-
-是否繼續？",
+                "這項測試會以背景模式開啟選取的組立，完全不執行零件替換，只單獨呼叫 AssemblyDocument.Save()。\r\n" +
+                "Save 成功或失敗都能幫助判斷：問題是否在背景開啟模式本身。\r\n\r\n" +
+                "請選擇已複製的測試副本。雖然不修改模型，但 Save 仍可能更新檔案資訊。\r\n\r\n組立檔：" + assemblyPath +
+                "\r\n\r\n是否繼續？",
                 "確認背景 Save 單獨測試", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
             if (confirmation != DialogResult.Yes) return;
 

@@ -53,9 +53,9 @@ namespace SEBatchReplace
                     return lines;
                 }
 
-                ComTypes.TYPEATTR typeAttr;
+                System.Runtime.InteropServices.ComTypes.TYPEATTR typeAttr;
                 typeInfo.GetTypeAttr(out typeAttrPointer);
-                typeAttr = (ComTypes.TYPEATTR)Marshal.PtrToStructure(typeAttrPointer, typeof(ComTypes.TYPEATTR));
+                typeAttr = (System.Runtime.InteropServices.ComTypes.TYPEATTR)Marshal.PtrToStructure(typeAttrPointer, typeof(System.Runtime.InteropServices.ComTypes.TYPEATTR));
                 string typeName, typeDoc, helpFile;
                 int helpContext;
                 typeInfo.GetDocumentation(-1, out typeName, out typeDoc, out helpContext, out helpFile);
@@ -68,7 +68,7 @@ namespace SEBatchReplace
                     try
                     {
                         typeInfo.GetFuncDesc(i, out funcDescPointer);
-                        ComTypes.FUNCDESC func = (ComTypes.FUNCDESC)Marshal.PtrToStructure(funcDescPointer, typeof(ComTypes.FUNCDESC));
+                        System.Runtime.InteropServices.ComTypes.FUNCDESC func = (System.Runtime.InteropServices.ComTypes.FUNCDESC)Marshal.PtrToStructure(funcDescPointer, typeof(System.Runtime.InteropServices.ComTypes.FUNCDESC));
                         int nameCapacity = Math.Max(1, Math.Min(65, func.cParams + 1));
                         string[] names = new string[nameCapacity];
                         int namesReturned;

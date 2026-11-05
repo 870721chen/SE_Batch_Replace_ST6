@@ -14,7 +14,7 @@ namespace SEBatchReplace
         private RadioButton _skipRadio;
         private RadioButton _stopRadio;
         private TextBox _logTextBox;
-        private ComboBox _readScopeComboBox;
+        private Button _revisionReadButton;
         private readonly List<ReplacementMapping> _mappings = new List<ReplacementMapping>();
 
         public MainForm()
@@ -164,20 +164,20 @@ namespace SEBatchReplace
                 WrapContents = false,
                 Padding = new Padding(0, 6, 0, 0)
             };
-            var revisionReadButton = new Button
+            _revisionReadButton = new Button
             {
                 Text = "Revision Manager 讀取測試（全部組立）",
                 Width = 260,
                 Height = 32
             };
-            revisionReadButton.Click += RevisionManagerReadAllAssemblies;
+            _revisionReadButton.Click += RevisionManagerReadAllAssemblies;
             var hint = new Label
             {
                 Text = "逐一讀取資料夾內所有 .asm；唯讀，不修改、不儲存檔案。",
                 AutoSize = true,
                 Padding = new Padding(8, 8, 0, 0)
             };
-            testPanel.Controls.Add(revisionReadButton);
+            testPanel.Controls.Add(_revisionReadButton);
             testPanel.Controls.Add(hint);
             root.Controls.Add(testPanel, 0, 3);
 
@@ -225,74 +225,6 @@ namespace SEBatchReplace
                 }
             }
         }
-
-        private void ReadActiveAssembly(object sender, EventArgs e)
-        {
-            try
-            {
-                AppendLog("開始連接 Solid Edge，讀取目前作用中的組立結構……");
-                bool includeNested = _readScopeComboBox.SelectedIndex == 1;
-                string scopeName = includeNested ? "完整階層" : "主組立第一層";
-                IList<string> occurrences = SolidEdgeReader.ReadActiveAssemblyOccurrences(includeNested);
-                AppendLog("讀取完成：" + scopeName + "共取得 " + occurrences.Count + " 個零件／子組立參照。");
-                foreach (string item in occurrences)
-                    AppendLog(item);
-
-                MessageBox.Show(this,
-                    "讀取完成（" + scopeName + "），共取得 " + occurrences.Count + " 個參照。\r\n詳細資料已列在作業紀錄。",
-                    "組立結構讀取完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-            catch (Exception ex)
-            {
-                string details = GetExceptionDetails(ex);
-                AppendLog("讀取失敗： " + details);
-                MessageBox.Show(this, details, "Solid Edge 讀取失敗（診斷資訊）", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
-        }
-
-        private void AutoReadSelectedAssembly(object sender, EventArgs e)
-        {
-            if (String.IsNullOrWhiteSpace(_folderTextBox.Text))
-            {
-                MessageBox.Show(this, "請先選擇組立根資料夾。", "尚未選擇資料夾", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            if (_assemblyList.SelectedIndex < 0)
-            {
-                MessageBox.Show(this, "請先在上方組立清單選擇一個 .asm 檔案。", "尚未選擇組立", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            string rootPath = _folderTextBox.Text.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            string relativePath = Convert.ToString(_assemblyList.SelectedItem);
-            string assemblyPath = Path.GetFullPath(Path.Combine(rootPath, relativePath));
-
-            try
-            {
-                AppendLog("開始自動開啟組立：" + relativePath);
-                bool includeNested = _readScopeComboBox.SelectedIndex == 1;
-                string scopeName = includeNested ? "完整階層" : "主組立第一層";
-                IList<string> occurrences = SolidEdgeReader.OpenReadAndCloseAssembly(assemblyPath, includeNested);
-                AppendLog("讀取完成（" + scopeName + "）：取得 " + occurrences.Count + " 個參照。");
-                foreach (string item in occurrences)
-                    AppendLog(item);
-
-                AppendLog("自動開啟／讀取／關閉測試完成。原始檔未修改、未儲存。");
-                MessageBox.Show(this,
-                    "測試完成。\r\n組立：" + relativePath +
-                    "\r\n讀取範圍：" + scopeName + "\r\n參照數：" + occurrences.Count +
-                    "\r\n\r\n若此文件原本未開啟，工具已在讀取後以不儲存方式關閉。\r\n若文件原本已開啟，工具會保留開啟狀態。",
-                    "自動開啟測試完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-            catch (Exception ex)
-            {
-                string details = GetExceptionDetails(ex);
-                AppendLog("自動開啟測試失敗：" + details);
-                MessageBox.Show(this, details, "自動開啟測試失敗（診斷資訊）", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
-        }
-
 
         private void RevisionManagerReadAllAssemblies(object sender, EventArgs e)
         {

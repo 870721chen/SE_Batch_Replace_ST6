@@ -46,6 +46,7 @@
     <Compile Include="FolderScanner.cs" />
     <Compile Include="SolidEdgeReader.cs" />
     <Compile Include="RevisionManagerReader.cs" />
+    <Compile Include="AsmReferenceScanner.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

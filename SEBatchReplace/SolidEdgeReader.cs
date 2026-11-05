@@ -125,6 +125,25 @@ namespace SEBatchReplace
         }
 
 
+        // Match an exact .par filename or a part-code prefix followed by a space.
+        // Example: P03-22-00.par matches P03-22-00 燒結-10.1x19.9x10.par,
+        // but does not match P03-22-001.par.
+        private static bool IsMatchingPartFileName(string candidateFileName, string expectedPartName)
+        {
+            if (String.IsNullOrWhiteSpace(candidateFileName) || String.IsNullOrWhiteSpace(expectedPartName))
+                return false;
+
+            string expected = Path.GetFileName(expectedPartName.Trim());
+            if (!expected.EndsWith(".par", StringComparison.OrdinalIgnoreCase))
+                expected += ".par";
+
+            if (String.Equals(candidateFileName, expected, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            string partCode = expected.Substring(0, expected.Length - 4);
+            return candidateFileName.StartsWith(partCode + " ", StringComparison.OrdinalIgnoreCase);
+        }
+
         // Lists every first-level occurrence and marks an exact filename match.
         // Read-only: no Replace call and no document save.
         public static IList<string> ListFirstLevelOccurrencesInBackground(string assemblyPath, string oldPartName)
@@ -191,7 +210,7 @@ namespace SEBatchReplace
                         string path = Convert.ToString(GetProperty(item, "OccurrenceFileName"));
                         bool subassembly = Convert.ToBoolean(GetProperty(item, "Subassembly"));
                         string fileName = String.IsNullOrWhiteSpace(path) ? String.Empty : Path.GetFileName(path);
-                        bool match = !subassembly && String.Equals(fileName, expectedName, StringComparison.OrdinalIgnoreCase);
+                        bool match = !subassembly && IsMatchingPartFileName(fileName, expectedName);
                         if (match) matchCount++;
                         output.Add("[Occurrence #" + index + "] " + (subassembly ? "[子組立]" : "[零件]") +
                             "；Name=" + (String.IsNullOrWhiteSpace(name) ? "(空)" : name) +
@@ -305,7 +324,7 @@ namespace SEBatchReplace
                         bool isSubassembly = Convert.ToBoolean(GetProperty(candidate, "Subassembly"));
                         string candidatePath = Convert.ToString(GetProperty(candidate, "OccurrenceFileName"));
                         if (!isSubassembly && !String.IsNullOrWhiteSpace(candidatePath) &&
-                            String.Equals(Path.GetFileName(candidatePath), expectedOldName, StringComparison.OrdinalIgnoreCase))
+                            IsMatchingPartFileName(Path.GetFileName(candidatePath), expectedOldName))
                         {
                             matchCount++;
                             if (matchCount == 1)

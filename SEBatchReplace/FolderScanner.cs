@@ -14,7 +14,7 @@ namespace SEBatchReplace
             if (!Directory.Exists(folderPath))
                 throw new DirectoryNotFoundException("找不到指定資料夾：" + folderPath);
 
-            return Directory.GetFiles(folderPath, "*.asm", SearchOption.TopDirectoryOnly)
+            return Directory.GetFiles(folderPath, "*.asm", SearchOption.AllDirectories)
                 .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
                 .ToList();
         }

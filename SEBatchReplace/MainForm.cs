@@ -37,7 +37,7 @@ namespace SEBatchReplace
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 34));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 31));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 35));
             Controls.Add(root);
 
@@ -126,7 +126,7 @@ namespace SEBatchReplace
             {
                 Dock = DockStyle.Fill,
                 FlowDirection = FlowDirection.RightToLeft,
-                WrapContents = false,
+                WrapContents = true,
                 Padding = new Padding(0, 4, 0, 0)
             };
             var executeButton = new Button
@@ -157,6 +157,13 @@ namespace SEBatchReplace
                 Height = 32
             };
             autoReadButton.Click += AutoReadSelectedAssembly;
+            var revisionReadButton = new Button
+            {
+                Text = "Revision Manager 讀取測試",
+                Width = 190,
+                Height = 32
+            };
+            revisionReadButton.Click += RevisionManagerReadSelectedAssembly;
              _readScopeComboBox = new ComboBox
             {
                 Width = 190,
@@ -179,6 +186,7 @@ namespace SEBatchReplace
             executePanel.Controls.Add(_readScopeComboBox);
             executePanel.Controls.Add(readButton);
             executePanel.Controls.Add(autoReadButton);
+            executePanel.Controls.Add(revisionReadButton);
             executePanel.Controls.Add(executeHint);
             root.Controls.Add(executePanel, 0, 3);
 
@@ -284,6 +292,56 @@ namespace SEBatchReplace
                 string details = GetExceptionDetails(ex);
                 AppendLog("自動開啟測試失敗：" + details);
                 MessageBox.Show(this, details, "自動開啟測試失敗（診斷資訊）", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+
+        private void RevisionManagerReadSelectedAssembly(object sender, EventArgs e)
+        {
+            if (String.IsNullOrWhiteSpace(_folderTextBox.Text) || !Directory.Exists(_folderTextBox.Text))
+            {
+                MessageBox.Show(this, "請先選擇組立根資料夾。", "尚未選擇資料夾", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (_assemblyList.SelectedIndex < 0)
+            {
+                MessageBox.Show(this, "請先在上方組立清單選擇一個 .asm 檔案。", "尚未選擇組立", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string rootPath = _folderTextBox.Text.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string relativePath = Convert.ToString(_assemblyList.SelectedItem);
+            string assemblyPath = Path.GetFullPath(Path.Combine(rootPath, relativePath));
+
+            try
+            {
+                AppendLog("========== Revision Manager 唯讀連結測試 ==========");
+                AppendLog("測試組立：" + relativePath);
+                AppendLog("此測試不呼叫 Save、Replace 或任何連結修改方法。");
+
+                UseWaitCursor = true;
+                IList<string> links = RevisionManagerReader.ReadLinkedDocuments(assemblyPath);
+
+                foreach (string link in links)
+                    AppendLog("[Revision Manager] " + link);
+
+                AppendLog("Revision Manager 讀取測試完成。");
+                MessageBox.Show(this,
+                    "Revision Manager 讀取完成。\r\n組立：" + relativePath +
+                    "\r\n" + (links.Count > 0 ? links[0] : "沒有回傳連結資料") +
+                    "\r\n\r\n詳細連結已列在作業紀錄。\r\n本次沒有修改或儲存任何檔案。",
+                    "Revision Manager 測試完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                string details = GetExceptionDetails(ex);
+                AppendLog("Revision Manager 測試失敗：" + details.Replace(Environment.NewLine, " | "));
+                MessageBox.Show(this, details, "Revision Manager 讀取失敗（診斷資訊）", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            finally
+            {
+                UseWaitCursor = false;
             }
         }
 

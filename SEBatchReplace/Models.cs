@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 
 namespace SEBatchReplace
 {
@@ -10,24 +11,26 @@ namespace SEBatchReplace
 
     public sealed class ReplacementMapping
     {
-        public string OldPartPath { get; private set; }
+        public string OldPartName { get; private set; }
         public string NewPartPath { get; private set; }
 
-        public ReplacementMapping(string oldPartPath, string newPartPath)
+        public ReplacementMapping(string oldPartName, string newPartPath)
         {
-            if (String.IsNullOrWhiteSpace(oldPartPath))
-                throw new ArgumentException("舊零件路徑不可空白。", "oldPartPath");
+            if (String.IsNullOrWhiteSpace(oldPartName))
+                throw new ArgumentException("舊零件名稱不可空白。", "oldPartName");
             if (String.IsNullOrWhiteSpace(newPartPath))
                 throw new ArgumentException("新零件路徑不可空白。", "newPartPath");
 
-            OldPartPath = oldPartPath;
+            OldPartName = Path.GetFileName(oldPartName.Trim());
+            if (!OldPartName.EndsWith(".par", StringComparison.OrdinalIgnoreCase))
+                OldPartName += ".par";
+
             NewPartPath = newPartPath;
         }
 
         public override string ToString()
         {
-            return System.IO.Path.GetFileName(OldPartPath) + "  →  " +
-                   System.IO.Path.GetFileName(NewPartPath);
+            return OldPartName + "  →  " + Path.GetFileName(NewPartPath);
         }
     }
 }

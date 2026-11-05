@@ -89,9 +89,11 @@ namespace SEBatchReplace
         {
             try
             {
+                // Solid Edge collection Item(index) is exposed as an IDispatch method,
+                // not as a normal .NET indexed property.
                 return target.GetType().InvokeMember(
                     propertyName,
-                    BindingFlags.GetProperty | BindingFlags.Public | BindingFlags.Instance,
+                    BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
                     null,
                     target,
                     arguments);

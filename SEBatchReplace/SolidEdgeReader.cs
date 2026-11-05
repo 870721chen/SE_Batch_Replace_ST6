@@ -50,26 +50,33 @@ namespace SEBatchReplace
             object occurrences = null;
             bool openedByThisMethod = false;
             bool closeAttempted = false;
+            string stage = "連接 Solid Edge";
 
             try
             {
                 application = Marshal.GetActiveObject("SolidEdge.Application");
+                stage = "取得 Solid Edge Documents 集合";
                 documents = GetProperty(application, "Documents");
 
+                stage = "檢查組立文件是否已開啟";
                 document = FindOpenDocument(documents, filePath);
                 if (document == null)
                 {
+                    stage = "由 Solid Edge 開啟組立文件";
                     document = OpenDocument(documents, filePath);
                     openedByThisMethod = true;
                 }
 
+                stage = "取得組立 Occurrences";
                 occurrences = GetProperty(document, "Occurrences");
+                stage = "讀取第一層參照";
                 IList<string> results = ReadOccurrences(occurrences);
                 ReleaseComObject(occurrences);
                 occurrences = null;
 
                 if (openedByThisMethod)
                 {
+                    stage = "關閉工具開啟的組立文件（不儲存）";
                     closeAttempted = true;
                     InvokeMethod(document, "Close", new object[] { false });
                     ReleaseComObject(document);
@@ -94,8 +101,9 @@ namespace SEBatchReplace
 
                 throw new InvalidOperationException(
                     "自動開啟／讀取／關閉組立時失敗。檔案：" + filePath +
-                    (openedByThisMethod ? "；此文件由工具開啟。" : "；此文件原本已開啟，工具不會主動關閉它。") +
-                    " 原因：" + ex.Message, ex);
+                    "；失敗階段：" + stage +
+                    (openedByThisMethod ? "；文件由工具開啟，請確認是否仍留在 Solid Edge 中。" : "；尚未確認文件是否已開啟，不會據此判定文件原本已開啟。") +
+                    "；原因：" + ex.Message, ex);
             }
             finally
             {

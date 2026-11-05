@@ -144,7 +144,7 @@ namespace SEBatchReplace
             return candidateFileName.StartsWith(partCode + " ", StringComparison.OrdinalIgnoreCase);
         }
 
-        // Lists every first-level occurrence and marks an exact filename match.
+        // Lists every first-level occurrence and marks exact or part-code-prefix matches.
         // Read-only: no Replace call and no document save.
         public static IList<string> ListFirstLevelOccurrencesInBackground(string assemblyPath, string oldPartName)
         {

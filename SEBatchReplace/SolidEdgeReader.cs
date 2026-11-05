@@ -124,6 +124,160 @@ namespace SEBatchReplace
             }
         }
 
+        // Replaces exactly one matching first-level part occurrence in memory only.
+        // The test assembly is always closed with SaveChanges=false.
+        public static IList<string> ReplaceOneOccurrenceInBackground(string assemblyPath, string oldPartName, string newPartPath)
+        {
+            if (String.IsNullOrWhiteSpace(assemblyPath) || !File.Exists(assemblyPath))
+                throw new FileNotFoundException("找不到指定的測試組立檔。", assemblyPath);
+            if (String.IsNullOrWhiteSpace(newPartPath) || !File.Exists(newPartPath))
+                throw new FileNotFoundException("找不到指定的新零件檔。", newPartPath);
+            if (String.IsNullOrWhiteSpace(oldPartName))
+                throw new ArgumentException("舊零件名稱不可空白。", "oldPartName");
+
+            string expectedOldName = Path.GetFileName(oldPartName.Trim());
+            if (!expectedOldName.EndsWith(".par", StringComparison.OrdinalIgnoreCase))
+                expectedOldName += ".par";
+
+            object application = null, documents = null, document = null, occurrences = null, targetOccurrence = null;
+            bool createdApplication = false, visibilityCaptured = false, originalVisible = true, documentOpened = false;
+            string stage = "連接或啟動 Solid Edge";
+            var output = new List<string>();
+
+            try
+            {
+                try { application = Marshal.GetActiveObject("SolidEdge.Application"); }
+                catch
+                {
+                    Type appType = Type.GetTypeFromProgID("SolidEdge.Application");
+                    if (appType == null) throw new InvalidOperationException("系統未註冊 SolidEdge.Application。");
+                    application = Activator.CreateInstance(appType);
+                    createdApplication = true;
+                }
+
+                originalVisible = Convert.ToBoolean(GetProperty(application, "Visible"));
+                visibilityCaptured = true;
+                SetProperty(application, "Visible", false);
+                documents = GetProperty(application, "Documents");
+
+                stage = "確認測試組立未開啟";
+                object alreadyOpen = FindOpenDocument(documents, assemblyPath);
+                if (alreadyOpen != null)
+                {
+                    ReleaseComObject(alreadyOpen);
+                    throw new InvalidOperationException("測試組立目前已在 Solid Edge 中開啟。請先關閉它，再執行替換測試。");
+                }
+
+                stage = "背景開啟測試組立";
+                document = documents.GetType().InvokeMember("Open",
+                    BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
+                    null, documents, new object[] { assemblyPath, (uint)8 });
+                if (document == null) throw new InvalidOperationException("Documents.Open 沒有回傳組立文件。");
+                documentOpened = true;
+
+                stage = "讀取主組立第一層 occurrences";
+                occurrences = GetProperty(document, "Occurrences");
+                int count = Convert.ToInt32(GetProperty(occurrences, "Count"));
+                output.Add("[組立] " + assemblyPath);
+                output.Add("[資訊] 第一層 occurrence 數量：" + count);
+
+                int matchCount = 0, matchedIndex = 0;
+                for (int index = 1; index <= count; index++)
+                {
+                    object candidate = null;
+                    try
+                    {
+                        candidate = GetIndexedProperty(occurrences, "Item", new object[] { index });
+                        bool isSubassembly = Convert.ToBoolean(GetProperty(candidate, "Subassembly"));
+                        string candidatePath = Convert.ToString(GetProperty(candidate, "OccurrenceFileName"));
+                        if (!isSubassembly && !String.IsNullOrWhiteSpace(candidatePath) &&
+                            String.Equals(Path.GetFileName(candidatePath), expectedOldName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            matchCount++;
+                            if (matchCount == 1)
+                            {
+                                targetOccurrence = candidate;
+                                candidate = null;
+                                matchedIndex = index;
+                            }
+                        }
+                    }
+                    finally { ReleaseComObject(candidate); }
+                }
+
+                output.Add("[搜尋] " + expectedOldName + "；符合的第一層 occurrence 數量：" + matchCount);
+                if (matchCount == 0) throw new InvalidOperationException("主組立第一層找不到符合的零件 occurrence，未執行替換。");
+                if (matchCount > 1) throw new InvalidOperationException("符合的 occurrence 多於一個，為避免替錯實例，本次未執行替換。");
+
+                string occurrenceName = Convert.ToString(GetProperty(targetOccurrence, "Name"));
+                string oldPath = Convert.ToString(GetProperty(targetOccurrence, "OccurrenceFileName"));
+                int? beforeCount = TryGetRelationCount(targetOccurrence);
+                output.Add("[目標] occurrence #" + matchedIndex + "；名稱：" + occurrenceName);
+                output.Add("[替換前路徑] " + oldPath);
+                output.Add("[Relations3d 數量（前）] " + (beforeCount.HasValue ? beforeCount.Value.ToString() : "無法讀取"));
+
+                stage = "呼叫 Occurrence.Replace（ReplaceAll=false）";
+                targetOccurrence.GetType().InvokeMember("Replace",
+                    BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance | BindingFlags.OptionalParamBinding,
+                    null, targetOccurrence, new object[] { newPartPath, false, Type.Missing });
+
+                stage = "讀取替換後資訊";
+                string afterPath = Convert.ToString(GetProperty(targetOccurrence, "OccurrenceFileName"));
+                int? afterCount = TryGetRelationCount(targetOccurrence);
+                output.Add("[替換後路徑] " + afterPath);
+                output.Add("[Relations3d 數量（後）] " + (afterCount.HasValue ? afterCount.Value.ToString() : "無法讀取"));
+                bool pathMatches = false;
+                try { pathMatches = String.Equals(Path.GetFullPath(afterPath), Path.GetFullPath(newPartPath), StringComparison.OrdinalIgnoreCase); }
+                catch { }
+                output.Add("[路徑檢查] " + (pathMatches ? "替換後路徑符合指定的新零件。" : "替換呼叫已返回，但路徑尚未確認符合，需檢查。"));
+                output.Add("[限制] Relations3d 數量相同不代表所有 mate/relationship 均有效；本次尚未做完整關聯有效性驗證。");
+
+                stage = "關閉測試組立且不儲存";
+                InvokeMethod(document, "Close", new object[] { false });
+                documentOpened = false;
+                output.Add("[完成] 已呼叫 Close(false)，本次替換未寫入組立檔。");
+                return output;
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("單一 occurrence 替換測試失敗。檔案：" + assemblyPath +
+                    "；失敗階段：" + stage + (documentOpened ? "；文件可能仍開啟，請檢查 Solid Edge。" : "") +
+                    "；原因：" + ex.Message, ex);
+            }
+            finally
+            {
+                ReleaseComObject(targetOccurrence);
+                ReleaseComObject(occurrences);
+                if (documentOpened && document != null)
+                {
+                    try { InvokeMethod(document, "Close", new object[] { false }); } catch { }
+                }
+                ReleaseComObject(document);
+                ReleaseComObject(documents);
+                if (createdApplication && application != null)
+                {
+                    try { InvokeMethod(application, "Quit", new object[0]); } catch { }
+                }
+                else if (visibilityCaptured && application != null)
+                {
+                    try { SetProperty(application, "Visible", originalVisible); } catch { }
+                }
+                ReleaseComObject(application);
+            }
+        }
+
+        private static int? TryGetRelationCount(object occurrence)
+        {
+            object relations = null;
+            try
+            {
+                relations = GetProperty(occurrence, "Relations3d");
+                return Convert.ToInt32(GetProperty(relations, "Count"));
+            }
+            catch { return null; }
+            finally { ReleaseComObject(relations); }
+        }
+
         public static IList<string> ReadActiveAssemblyOccurrences(bool includeNested)
         {
             object application = null;

@@ -215,7 +215,8 @@ namespace SEBatchReplace
                 details.Append("例外 ").Append(level + 1).Append("：")
                     .Append(current.GetType().FullName).AppendLine();
                 details.Append("訊息：").AppendLine(current.Message);
-                details.Append("HRESULT：0x").Append(current.HResult.ToString("X8"));
+                // Exception.HResult is not publicly readable on older .NET Framework versions.
+                // Keep diagnostics compatible with the legacy Windows 7 runtime.
                 current = current.InnerException;
                 level++;
             }

@@ -55,7 +55,7 @@ namespace SEBatchReplace
             assemblyGroup.Controls.Add(_assemblyList);
             root.Controls.Add(assemblyGroup, 0, 1);
 
-            var mappingGroup = new GroupBox { Text = "手動指定零件對應（舊 .par → 新 .par）", Dock = DockStyle.Fill };
+            var mappingGroup = new GroupBox { Text = "手動指定零件對應（舊零件名稱 → 新 .par 檔案）", Dock = DockStyle.Fill };
             var mappingLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = new Padding(6) };
             mappingLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             mappingLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
@@ -114,36 +114,104 @@ namespace SEBatchReplace
 
         private void AddMapping(object sender, EventArgs e)
         {
-            string oldPath = SelectPartFile("選擇舊零件（.par）");
-            if (oldPath == null) return;
-            string newPath = SelectPartFile("選擇新零件（.par）");
-            if (newPath == null) return;
-
-            if (String.Equals(oldPath, newPath, StringComparison.OrdinalIgnoreCase))
-            {
-                MessageBox.Show(this, "新舊零件不可為同一個檔案。", "配對無效", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            string oldPartName = PromptOldPartName();
+            if (oldPartName == null)
                 return;
-            }
+
+            string newPath = SelectNewPartFile();
+            if (newPath == null)
+                return;
 
             foreach (ReplacementMapping mapping in _mappings)
             {
-                if (String.Equals(mapping.OldPartPath, oldPath, StringComparison.OrdinalIgnoreCase))
+                if (String.Equals(mapping.OldPartName, oldPartName, StringComparison.OrdinalIgnoreCase))
                 {
-                    MessageBox.Show(this, "這個舊零件已經建立配對。", "重複配對", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show(this, "這個舊零件名稱已經建立配對。", "重複配對", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
             }
 
-            _mappings.Add(new ReplacementMapping(oldPath, newPath));
-            _mappingList.Items.Add(_mappings[_mappings.Count - 1]);
-            AppendLog("新增配對：" + Path.GetFileName(oldPath) + " → " + Path.GetFileName(newPath));
+            var newMapping = new ReplacementMapping(oldPartName, newPath);
+            _mappings.Add(newMapping);
+            _mappingList.Items.Add(newMapping);
+            AppendLog("新增配對：" + newMapping.OldPartName + " → " + Path.GetFileName(newPath));
         }
 
-        private string SelectPartFile(string title)
+        private string PromptOldPartName()
+        {
+            using (var dialog = new Form())
+            using (var nameBox = new TextBox())
+            using (var label = new Label())
+            using (var okButton = new Button())
+            using (var cancelButton = new Button())
+            {
+                dialog.Text = "輸入舊零件名稱";
+                dialog.StartPosition = FormStartPosition.CenterParent;
+                dialog.FormBorderStyle = FormBorderStyle.FixedDialog;
+                dialog.MinimizeBox = false;
+                dialog.MaximizeBox = false;
+                dialog.ShowInTaskbar = false;
+                dialog.ClientSize = new Size(390, 112);
+
+                label.Text = "請輸入組立檔中原有的零件檔名（可省略 .par）：";
+                label.AutoSize = true;
+                label.Location = new Point(12, 12);
+                nameBox.Location = new Point(12, 38);
+                nameBox.Width = 365;
+                okButton.Text = "確定";
+                okButton.DialogResult = DialogResult.OK;
+                okButton.Location = new Point(210, 73);
+                cancelButton.Text = "取消";
+                cancelButton.DialogResult = DialogResult.Cancel;
+                cancelButton.Location = new Point(292, 73);
+
+                dialog.Controls.Add(label);
+                dialog.Controls.Add(nameBox);
+                dialog.Controls.Add(okButton);
+                dialog.Controls.Add(cancelButton);
+                dialog.AcceptButton = okButton;
+                dialog.CancelButton = cancelButton;
+
+                if (dialog.ShowDialog(this) != DialogResult.OK)
+                    return null;
+
+                string value = nameBox.Text.Trim();
+                if (String.IsNullOrWhiteSpace(value))
+                {
+                    MessageBox.Show(this, "請輸入舊零件名稱。", "名稱不可空白", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return null;
+                }
+
+                if (!String.Equals(Path.GetFileName(value), value, StringComparison.Ordinal))
+                {
+                    MessageBox.Show(this, "請只輸入檔名，不需要輸入資料夾路徑。", "名稱格式錯誤", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return null;
+                }
+
+                if (value.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+                {
+                    MessageBox.Show(this, "零件名稱包含無效字元。", "名稱格式錯誤", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return null;
+                }
+
+                if (value.IndexOf('.') >= 0 && !value.EndsWith(".par", StringComparison.OrdinalIgnoreCase))
+                {
+                    MessageBox.Show(this, "請輸入 .par 零件檔名。", "名稱格式錯誤", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return null;
+                }
+
+                if (!value.EndsWith(".par", StringComparison.OrdinalIgnoreCase))
+                    value += ".par";
+
+                return value;
+            }
+        }
+
+        private string SelectNewPartFile()
         {
             using (var dialog = new OpenFileDialog())
             {
-                dialog.Title = title;
+                dialog.Title = "選擇要替換成的新零件（.par）";
                 dialog.Filter = "Solid Edge 零件檔 (*.par)|*.par";
                 dialog.CheckFileExists = true;
                 return dialog.ShowDialog(this) == DialogResult.OK ? dialog.FileName : null;

@@ -65,11 +65,12 @@ namespace SEBatchReplace
                         continue;
 
                     string normalized = Path.GetFileName(partName.Trim());
-                    byte[] ascii = TryGetAsciiBytes(normalized);
+                    string searchText = normalized + " ";
+                    byte[] ascii = TryGetAsciiBytes(searchText);
                     if (ascii != null)
                         searches.Add(CreateSearch(normalized, "ASCII", ascii));
 
-                    searches.Add(CreateSearch(normalized, "UTF-16LE", Encoding.Unicode.GetBytes(normalized)));
+                    searches.Add(CreateSearch(normalized, "UTF-16LE", Encoding.Unicode.GetBytes(searchText)));
                 }
             }
 

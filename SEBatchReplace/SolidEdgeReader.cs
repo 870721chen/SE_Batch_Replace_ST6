@@ -400,6 +400,105 @@ namespace SEBatchReplace
         }
 
 
+        // Diagnostic isolation test: open an assembly in background and call Save without
+        // performing any Replace operation. Use only a disposable test copy.
+        public static IList<string> TestBackgroundSaveWithoutChanges(string assemblyPath)
+        {
+            if (String.IsNullOrWhiteSpace(assemblyPath) || !File.Exists(assemblyPath))
+                throw new FileNotFoundException("找不到指定的測試組立檔。", assemblyPath);
+
+            object application = null, documents = null, document = null;
+            bool createdApplication = false, visibilityCaptured = false, originalVisible = true, documentOpened = false;
+            string stage = "連接或啟動 Solid Edge";
+            var output = new List<string>();
+
+            try
+            {
+                try { application = Marshal.GetActiveObject("SolidEdge.Application"); }
+                catch
+                {
+                    Type appType = Type.GetTypeFromProgID("SolidEdge.Application");
+                    if (appType == null) throw new InvalidOperationException("系統未註冊 SolidEdge.Application。");
+                    application = Activator.CreateInstance(appType);
+                    createdApplication = true;
+                }
+
+                stage = "讀取原始顯示狀態";
+                originalVisible = Convert.ToBoolean(GetProperty(application, "Visible"));
+                visibilityCaptured = true;
+                SetProperty(application, "Visible", false);
+                documents = GetProperty(application, "Documents");
+
+                stage = "確認測試組立未開啟";
+                object alreadyOpen = FindOpenDocument(documents, assemblyPath);
+                if (alreadyOpen != null)
+                {
+                    ReleaseComObject(alreadyOpen);
+                    throw new InvalidOperationException("測試組立目前已在 Solid Edge 中開啟。請先關閉它，再執行 Save 單獨測試。");
+                }
+
+                FileAttributes attributes = File.GetAttributes(assemblyPath);
+                bool isReadOnly = (attributes & FileAttributes.ReadOnly) == FileAttributes.ReadOnly;
+                output.Add("[測試模式] 背景開啟 JDOCUMENTPROP_NOWINDOW=8；不執行 Replace；直接呼叫 Save。");
+                output.Add("[檔案唯讀屬性] " + (isReadOnly ? "是" : "否"));
+                output.Add("[組立檔] " + assemblyPath);
+                if (isReadOnly)
+                    throw new InvalidOperationException("測試組立檔具有 ReadOnly 屬性，先移除唯讀屬性後再測試。");
+
+                stage = "背景開啟測試組立";
+                document = documents.GetType().InvokeMember("Open",
+                    BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
+                    null, documents, new object[] { assemblyPath, (uint)8 });
+                if (document == null) throw new InvalidOperationException("Documents.Open 沒有回傳組立文件。");
+                documentOpened = true;
+
+                output.Add("[文件 FullName] " + Convert.ToString(GetProperty(document, "FullName")));
+                stage = "讀取開啟後文件資訊";
+                object occurrences = null;
+                try
+                {
+                    occurrences = GetProperty(document, "Occurrences");
+                    output.Add("[第一層 occurrence 數量] " + Convert.ToString(GetProperty(occurrences, "Count")));
+                }
+                finally { ReleaseComObject(occurrences); }
+
+                stage = "背景文件 Save（未執行 Replace）";
+                InvokeMethod(document, "Save", new object[0]);
+                output.Add("[Save 結果] 成功；此測試沒有執行任何零件替換。");
+
+                stage = "關閉測試組立";
+                InvokeMethod(document, "Close", new object[] { false });
+                documentOpened = false;
+                output.Add("[完成] 已呼叫 Close(false)，文件已關閉。");
+                return output;
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("背景 Save 單獨測試失敗。檔案：" + assemblyPath +
+                    "；失敗階段：" + stage +
+                    (documentOpened ? "；文件可能仍開啟，請檢查 Solid Edge。" : "") +
+                    "；原因：" + ex.Message, ex);
+            }
+            finally
+            {
+                if (documentOpened && document != null)
+                {
+                    try { InvokeMethod(document, "Close", new object[] { false }); } catch { }
+                }
+                ReleaseComObject(document);
+                ReleaseComObject(documents);
+                if (createdApplication && application != null)
+                {
+                    try { InvokeMethod(application, "Quit", new object[0]); } catch { }
+                }
+                else if (visibilityCaptured && application != null)
+                {
+                    try { SetProperty(application, "Visible", originalVisible); } catch { }
+                }
+                ReleaseComObject(application);
+            }
+        }
+
         // Replaces exactly one first-level occurrence, saves the selected test assembly,
         // closes it, then reopens it in the background to verify the persisted reference.
         public static IList<string> ReplaceOneOccurrenceSaveAndReopenInBackground(

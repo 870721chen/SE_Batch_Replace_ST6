@@ -151,7 +151,7 @@ namespace SEBatchReplace
             autoReadButton.Click += AutoReadSelectedAssembly;
             var executeHint = new Label
             {
-                Text = "先在 Solid Edge 開啟 .asm，再讀取結構",
+                Text = "需先啟動 Solid Edge，再讀取完整組立階層",
                 AutoSize = true,
                 TextAlign = ContentAlignment.MiddleLeft,
                 Padding = new Padding(0, 8, 8, 0)
@@ -167,7 +167,7 @@ namespace SEBatchReplace
             logGroup.Controls.Add(_logTextBox);
             root.Controls.Add(logGroup, 0, 4);
 
-            AppendLog("目前僅讀取目前作用中的組立結構，不會修改或儲存任何組立或零件檔。");
+            AppendLog("目前讀取組立及所有子組立的完整階層，不會修改或儲存任何組立或零件檔。");
         }
 
         private void BrowseFolder(object sender, EventArgs e)
@@ -206,12 +206,12 @@ namespace SEBatchReplace
             {
                 AppendLog("開始連接 Solid Edge，讀取目前作用中的組立結構……");
                 IList<string> occurrences = SolidEdgeReader.ReadActiveAssemblyOccurrences();
-                AppendLog("讀取完成：目前組立包含 " + occurrences.Count + " 個第一層零件／子組立參照。");
+                AppendLog("讀取完成：目前組立包含 " + occurrences.Count + " 個完整階層中的零件／子組立參照。");
                 foreach (string item in occurrences)
                     AppendLog(item);
 
                 MessageBox.Show(this,
-                    "讀取完成，共取得 " + occurrences.Count + " 個第一層參照。\r\n詳細資料已列在作業紀錄。",
+                    "讀取完成，共取得 " + occurrences.Count + " 個階層參照。\r\n詳細資料已列在作業紀錄。",
                     "組立結構讀取完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
@@ -244,14 +244,14 @@ namespace SEBatchReplace
             {
                 AppendLog("開始自動開啟組立：" + relativePath);
                 IList<string> occurrences = SolidEdgeReader.OpenReadAndCloseAssembly(assemblyPath);
-                AppendLog("讀取完成：取得 " + occurrences.Count + " 個第一層參照。");
+                AppendLog("讀取完成：取得 " + occurrences.Count + " 個階層參照。");
                 foreach (string item in occurrences)
                     AppendLog(item);
 
                 AppendLog("自動開啟／讀取／關閉測試完成。原始檔未修改、未儲存。");
                 MessageBox.Show(this,
                     "測試完成。\r\n組立：" + relativePath +
-                    "\r\n第一層參照數：" + occurrences.Count +
+                    "\r\n完整階層參照數：" + occurrences.Count +
                     "\r\n\r\n若此文件原本未開啟，工具已在讀取後以不儲存方式關閉。\r\n若文件原本已開啟，工具會保留開啟狀態。",
                     "自動開啟測試完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }

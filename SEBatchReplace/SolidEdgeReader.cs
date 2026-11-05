@@ -69,22 +69,38 @@ namespace SEBatchReplace
 
         private static object GetProperty(object target, string propertyName)
         {
-            return target.GetType().InvokeMember(
-                propertyName,
-                BindingFlags.GetProperty | BindingFlags.Public | BindingFlags.Instance,
-                null,
-                target,
-                null);
+            try
+            {
+                return target.GetType().InvokeMember(
+                    propertyName,
+                    BindingFlags.GetProperty | BindingFlags.Public | BindingFlags.Instance,
+                    null,
+                    target,
+                    null);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    "讀取 Solid Edge COM 成員 '" + propertyName + "' 失敗。", ex);
+            }
         }
 
         private static object GetIndexedProperty(object target, string propertyName, object[] arguments)
         {
-            return target.GetType().InvokeMember(
-                propertyName,
-                BindingFlags.GetProperty | BindingFlags.Public | BindingFlags.Instance,
-                null,
-                target,
-                arguments);
+            try
+            {
+                return target.GetType().InvokeMember(
+                    propertyName,
+                    BindingFlags.GetProperty | BindingFlags.Public | BindingFlags.Instance,
+                    null,
+                    target,
+                    arguments);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    "存取 Solid Edge COM 索引成員 '" + propertyName + "' 失敗。", ex);
+            }
         }
 
         private static void ReleaseComObject(object value)

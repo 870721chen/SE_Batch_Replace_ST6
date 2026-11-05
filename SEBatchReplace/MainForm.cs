@@ -18,6 +18,7 @@ namespace SEBatchReplace
         private Button _asmScanButton;
         private Button _backgroundOpenButton;
         private Button _apiProbeButton;
+        private Button _singleReplaceTestButton;
         private readonly List<ReplacementMapping> _mappings = new List<ReplacementMapping>();
 
         public MainForm()
@@ -43,7 +44,7 @@ namespace SEBatchReplace
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 25F));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 38F));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 84));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 37F));
             Controls.Add(root);
 
@@ -165,7 +166,7 @@ namespace SEBatchReplace
             {
                 Dock = DockStyle.Fill,
                 FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = false,
+                WrapContents = true,
                 Padding = new Padding(0, 6, 0, 0)
             };
             _revisionReadButton = new Button
@@ -196,6 +197,13 @@ namespace SEBatchReplace
                 Height = 32
             };
             _apiProbeButton.Click += ProbeAssemblyApiMembers;
+            _singleReplaceTestButton = new Button
+            {
+                Text = "單一 occurrence 替換測試（不儲存）",
+                Width = 250,
+                Height = 32
+            };
+            _singleReplaceTestButton.Click += SingleOccurrenceReplaceTest;
             var hint = new Label
             {
                 Text = "唯讀初篩；確認後才進行替換。",
@@ -206,6 +214,7 @@ namespace SEBatchReplace
             testPanel.Controls.Add(_asmScanButton);
             testPanel.Controls.Add(_backgroundOpenButton);
             testPanel.Controls.Add(_apiProbeButton);
+            testPanel.Controls.Add(_singleReplaceTestButton);
             testPanel.Controls.Add(hint);
             root.Controls.Add(testPanel, 0, 3);
 
@@ -363,6 +372,75 @@ namespace SEBatchReplace
                 UseWaitCursor = false;
                 _apiProbeButton.Enabled = true;
                 AppendLog("========== Solid Edge COM API 成員診斷結束 ==========");
+            }
+        }
+
+        private void SingleOccurrenceReplaceTest(object sender, EventArgs e)
+        {
+            if (String.IsNullOrWhiteSpace(_folderTextBox.Text) || !Directory.Exists(_folderTextBox.Text))
+            {
+                MessageBox.Show(this, "請先選擇有效的組立根資料夾。", "尚未選擇資料夾", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            if (_assemblyList.SelectedIndex < 0)
+            {
+                MessageBox.Show(this, "請先選取已複製的測試用 .asm 檔案。", "尚未選取組立", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            if (_mappingList.SelectedIndex < 0 || _mappingList.SelectedIndex >= _mappings.Count)
+            {
+                MessageBox.Show(this, "請先選取一筆舊零件與新零件配對。", "尚未選取配對", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string relativePath = Convert.ToString(_assemblyList.SelectedItem);
+            string assemblyPath = Path.Combine(_folderTextBox.Text, relativePath);
+            ReplacementMapping mapping = _mappings[_mappingList.SelectedIndex];
+            if (!File.Exists(assemblyPath))
+            {
+                MessageBox.Show(this, "找不到選取的組立檔：" + assemblyPath, "檔案不存在", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            if (!File.Exists(mapping.NewPartPath))
+            {
+                MessageBox.Show(this, "找不到新零件檔案：" + mapping.NewPartPath, "新零件不存在", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            DialogResult confirmation = MessageBox.Show(this,
+                "即將在 Solid Edge 背景開啟選取的測試組立，並只替換一個符合的 occurrence。\r\n\r\n" +
+                "組立：" + relativePath + "\r\n舊零件：" + mapping.OldPartName +
+                "\r\n新零件：" + mapping.NewPartPath +
+                "\r\n\r\n本次設定 ReplaceAll=false，測試後以 Close(false) 關閉，不儲存。\r\n" +
+                "如果符合的 occurrence 不是剛好一個，程式會停止而不執行替換。\r\n\r\n是否開始？",
+                "確認單一零件替換測試", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            if (confirmation != DialogResult.Yes) return;
+
+            _singleReplaceTestButton.Enabled = false;
+            UseWaitCursor = true;
+            AppendLog("========== 開始單一 occurrence 替換測試 ==========");
+            AppendLog("[測試組立] " + relativePath);
+            AppendLog("[替換配對] " + mapping.OldPartName + " → " + mapping.NewPartPath);
+            AppendLog("[安全設定] ReplaceAll=false；測試後 Close(false)，不儲存。");
+            try
+            {
+                IList<string> lines = SolidEdgeReader.ReplaceOneOccurrenceInBackground(
+                    assemblyPath, mapping.OldPartName, mapping.NewPartPath);
+                foreach (string line in lines) AppendLog(line);
+                MessageBox.Show(this,
+                    "單一 occurrence 替換測試已完成。\r\n組立已關閉且未儲存。\r\n請查看作業紀錄中的替換前後路徑及關聯數量。",
+                    "替換測試完成（未儲存）", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                AppendLog("[單一替換測試失敗] " + GetExceptionDetails(ex).Replace(Environment.NewLine, " | "));
+                MessageBox.Show(this, ex.Message, "單一替換測試失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                UseWaitCursor = false;
+                _singleReplaceTestButton.Enabled = true;
+                AppendLog("========== 單一 occurrence 替換測試結束 ==========");
             }
         }
 

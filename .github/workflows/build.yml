@@ -1,0 +1,33 @@
+name: Build SE Batch Replace
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Restore and build
+        shell: pwsh
+        run: |
+          msbuild .\SEBatchReplace.sln /t:Restore,Build /p:Configuration=Release /p:Platform=x64 /p:RestoreIgnoreFailedSources=true /m
+
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: SEBatchReplace-x64
+          path: SEBatchReplace\bin\Release\SEBatchReplace.exe
+          if-no-files-found: error
+          retention-days: 30

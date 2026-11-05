@@ -55,7 +55,7 @@ namespace SEBatchReplace
 
             var folderLabel = new Label
             {
-                Text = "組立資料夾（只掃描第一層 .asm）",
+                Text = "組立資料夾（包含所有子資料夾，遞迴搜尋 .asm）",
                 AutoSize = true,
                 Anchor = AnchorStyles.Left,
                 Margin = new Padding(0, 0, 0, 2)
@@ -130,9 +130,14 @@ namespace SEBatchReplace
                 {
                     IList<string> files = FolderScanner.GetAssemblyFiles(dialog.SelectedPath);
                     _assemblyList.Items.Clear();
+                    string rootPath = dialog.SelectedPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
                     foreach (string file in files)
-                        _assemblyList.Items.Add(file);
-                    AppendLog("掃描完成：找到 " + files.Count + " 個第一層 .asm 檔案。");
+                    {
+                        string relativePath = file.Substring(rootPath.Length)
+                            .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                        _assemblyList.Items.Add(relativePath);
+                    }
+                    AppendLog("遞迴掃描完成：包含所有子資料夾，共找到 " + files.Count + " 個 .asm 檔案。");
                 }
                 catch (Exception ex)
                 {

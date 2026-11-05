@@ -168,7 +168,7 @@ namespace SEBatchReplace
             var readScopePanel = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                ColumnCount = 4,
+                ColumnCount = 5,
                 RowCount = 1,
                 Padding = new Padding(0, 8, 0, 0),
                 Margin = new Padding(0)
@@ -177,6 +177,7 @@ namespace SEBatchReplace
             readScopePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230F));
             readScopePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             readScopePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220F));
+            readScopePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230F));
 
             var readScopeLabel = new Label
             {
@@ -217,10 +218,19 @@ namespace SEBatchReplace
             };
             _occurrenceListButton.Click += ListFirstLevelOccurrences;
 
+            _singleReplaceTestButton = new Button
+            {
+                Text = "單一 occurrence 替換測試（不儲存）",
+                Dock = DockStyle.Fill,
+                Margin = new Padding(8, 0, 0, 0)
+            };
+            _singleReplaceTestButton.Click += SingleOccurrenceReplaceTest;
+
             readScopePanel.Controls.Add(readScopeLabel, 0, 0);
             readScopePanel.Controls.Add(_readScopeComboBox, 1, 0);
             readScopePanel.Controls.Add(_readScopeDescriptionLabel, 2, 0);
             readScopePanel.Controls.Add(_occurrenceListButton, 3, 0);
+            readScopePanel.Controls.Add(_singleReplaceTestButton, 4, 0);
             root.Controls.Add(readScopePanel, 0, 3);
 
             var logGroup = new GroupBox { Text = "作業紀錄", Dock = DockStyle.Fill };

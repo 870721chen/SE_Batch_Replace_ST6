@@ -124,14 +124,22 @@ namespace SEBatchReplace
                 Height = 32,
                 Enabled = false
             };
+            var readButton = new Button
+            {
+                Text = "讀取目前組立結構",
+                Width = 170,
+                Height = 32
+            };
+            readButton.Click += ReadActiveAssembly;
             var executeHint = new Label
             {
-                Text = "待完成 Solid Edge 連線與替換核心後啟用",
+                Text = "先在 Solid Edge 開啟 .asm，再讀取結構",
                 AutoSize = true,
                 TextAlign = ContentAlignment.MiddleLeft,
                 Padding = new Padding(0, 8, 8, 0)
             };
             executePanel.Controls.Add(executeButton);
+            executePanel.Controls.Add(readButton);
             executePanel.Controls.Add(executeHint);
             root.Controls.Add(executePanel, 0, 4);
 
@@ -170,6 +178,27 @@ namespace SEBatchReplace
                     AppendLog("掃描失敗：" + ex.Message);
                     MessageBox.Show(this, ex.Message, "掃描失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
+            }
+        }
+
+        private void ReadActiveAssembly(object sender, EventArgs e)
+        {
+            try
+            {
+                AppendLog("開始連接 Solid Edge，讀取目前作用中的組立結構……");
+                IList<string> occurrences = SolidEdgeReader.ReadActiveAssemblyOccurrences();
+                AppendLog("讀取完成：目前組立包含 " + occurrences.Count + " 個第一層零件／子組立參照。");
+                foreach (string item in occurrences)
+                    AppendLog(item);
+
+                MessageBox.Show(this,
+                    "讀取完成，共取得 " + occurrences.Count + " 個第一層參照。\r\n詳細資料已列在作業紀錄。",
+                    "組立結構讀取完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                AppendLog("讀取失敗：" + ex.Message);
+                MessageBox.Show(this, ex.Message, "Solid Edge 讀取失敗", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
 

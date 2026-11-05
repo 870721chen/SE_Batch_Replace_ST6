@@ -21,7 +21,8 @@ namespace SEBatchReplace
                     throw new InvalidOperationException("Solid Edge 目前沒有開啟中的文件。");
 
                 occurrences = GetProperty(document, "Occurrences");
-                return ReadOccurrences(occurrences);
+                string rootPath = Convert.ToString(GetProperty(document, "FullName"));
+                return ReadOccurrencesRecursive(occurrences, 0, rootPath, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
             }
             catch (COMException ex)
             {
@@ -69,8 +70,8 @@ namespace SEBatchReplace
 
                 stage = "取得組立 Occurrences";
                 occurrences = GetProperty(document, "Occurrences");
-                stage = "讀取第一層參照";
-                IList<string> results = ReadOccurrences(occurrences);
+                stage = "讀取完整組立階層";
+                IList<string> results = ReadOccurrencesRecursive(occurrences, 0, filePath, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
                 ReleaseComObject(occurrences);
                 occurrences = null;
 
@@ -170,32 +171,125 @@ namespace SEBatchReplace
             }
         }
 
-        private static IList<string> ReadOccurrences(object occurrences)
+        private static IList<string> ReadOccurrencesRecursive(
+            object occurrences,
+            int depth,
+            string assemblyPath,
+            HashSet<string> ancestorPaths)
         {
-            var results = new List<string>();
-            int count = Convert.ToInt32(GetProperty(occurrences, "Count"));
+            if (depth > 64)
+                throw new InvalidOperationException("組立階層超過 64 層，已停止讀取以避免異常遞迴。");
 
-            for (int index = 1; index <= count; index++)
+            string normalizedPath = NormalizePath(assemblyPath);
+            if (!String.IsNullOrWhiteSpace(normalizedPath))
             {
-                object occurrence = null;
-                try
-                {
-                    occurrence = GetIndexedProperty(occurrences, "Item", new object[] { index });
-                    string fileName = Convert.ToString(GetProperty(occurrence, "OccurrenceFileName"));
-                    string occurrenceName = Convert.ToString(GetProperty(occurrence, "Name"));
-
-                    if (String.IsNullOrWhiteSpace(fileName))
-                        fileName = "(無法取得零件檔案路徑)";
-
-                    results.Add(index.ToString() + ". " + occurrenceName + " | " +
-                        Path.GetFileName(fileName) + " | " + fileName);
-                }
-                finally
-                {
-                    ReleaseComObject(occurrence);
-                }
+                if (ancestorPaths.Contains(normalizedPath))
+                    throw new InvalidOperationException("偵測到循環組立參照：" + normalizedPath);
+                ancestorPaths.Add(normalizedPath);
             }
-            return results;
+
+            var results = new List<string>();
+            try
+            {
+                int count = Convert.ToInt32(GetProperty(occurrences, "Count"));
+
+                for (int index = 1; index <= count; index++)
+                {
+                    object occurrence = null;
+                    object subassemblyDocument = null;
+                    object subOccurrences = null;
+                    try
+                    {
+                        occurrence = GetIndexedProperty(occurrences, "Item", new object[] { index });
+                        string fileName = Convert.ToString(GetProperty(occurrence, "OccurrenceFileName"));
+                        string occurrenceName = Convert.ToString(GetProperty(occurrence, "Name"));
+                        bool isSubassembly = Convert.ToBoolean(GetProperty(occurrence, "Subassembly"));
+
+                        if (String.IsNullOrWhiteSpace(fileName))
+                            fileName = "(無法取得零件檔案路徑)";
+
+                        string indent = new string(' ', depth * 4);
+                        string itemType = isSubassembly ? "[子組立]" : "[零件]";
+                        results.Add(indent + index.ToString() + ". " + itemType + " " + occurrenceName +
+                            " | " + Path.GetFileName(fileName) + " | " + fileName);
+
+                        if (isSubassembly)
+                        {
+                            string childPath = fileName;
+                            string normalizedChildPath = NormalizePath(childPath);
+                            if (!String.IsNullOrWhiteSpace(normalizedChildPath) &&
+                                ancestorPaths.Contains(normalizedChildPath))
+                            {
+                                results.Add(indent + "    [停止展開：偵測到循環參照] " + childPath);
+                                continue;
+                            }
+
+                            subassemblyDocument = GetProperty(occurrence, "OccurrenceDocument");
+                            if (subassemblyDocument == null)
+                            {
+                                results.Add(indent + "    [無法展開：OccurrenceDocument 為空]");
+                                continue;
+                            }
+
+                            subOccurrences = GetProperty(subassemblyDocument, "Occurrences");
+                            IList<string> children = ReadOccurrencesRecursive(
+                                subOccurrences,
+                                depth + 1,
+                                childPath,
+                                ancestorPaths);
+
+                            foreach (string child in children)
+                                results.Add(child);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new InvalidOperationException(
+                            "讀取第 " + index + " 個參照時失敗。" +
+                            (occurrence == null ? String.Empty : " 參照：" + SafeGetOccurrenceName(occurrence)) +
+                            "；原因：" + ex.Message, ex);
+                    }
+                    finally
+                    {
+                        ReleaseComObject(subOccurrences);
+                        ReleaseComObject(subassemblyDocument);
+                        ReleaseComObject(occurrence);
+                    }
+                }
+                return results;
+            }
+            finally
+            {
+                if (!String.IsNullOrWhiteSpace(normalizedPath))
+                    ancestorPaths.Remove(normalizedPath);
+            }
+        }
+
+        private static string SafeGetOccurrenceName(object occurrence)
+        {
+            try
+            {
+                return Convert.ToString(GetProperty(occurrence, "Name"));
+            }
+            catch
+            {
+                return "(無法取得參照名稱)";
+            }
+        }
+
+        private static string NormalizePath(string path)
+        {
+            if (String.IsNullOrWhiteSpace(path) || path.StartsWith("("))
+                return null;
+
+            try
+            {
+                return Path.GetFullPath(path);
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private static object GetProperty(object target, string propertyName)

@@ -13,8 +13,6 @@ namespace SEBatchReplace
             object application = null;
             object document = null;
             object occurrences = null;
-            var results = new List<string>();
-
             try
             {
                 application = Marshal.GetActiveObject("SolidEdge.Application");
@@ -22,37 +20,8 @@ namespace SEBatchReplace
                 if (document == null)
                     throw new InvalidOperationException("Solid Edge 目前沒有開啟中的文件。");
 
-                try
-                {
-                    occurrences = GetProperty(document, "Occurrences");
-                }
-                catch
-                {
-                    throw new InvalidOperationException("目前作用中的文件不是可讀取的組立文件。請先在 Solid Edge 開啟一個 .asm 文件並切換到該文件。");
-                }
-
-                int count = Convert.ToInt32(GetProperty(occurrences, "Count"));
-                for (int index = 1; index <= count; index++)
-                {
-                    object occurrence = null;
-                    try
-                    {
-                        occurrence = GetIndexedProperty(occurrences, "Item", new object[] { index });
-                        string fileName = Convert.ToString(GetProperty(occurrence, "OccurrenceFileName"));
-                        string occurrenceName = Convert.ToString(GetProperty(occurrence, "Name"));
-
-                        if (String.IsNullOrWhiteSpace(fileName))
-                            fileName = "(無法取得零件檔案路徑)";
-
-                        results.Add(index.ToString() + ". " + occurrenceName + " | " + Path.GetFileName(fileName) + " | " + fileName);
-                    }
-                    finally
-                    {
-                        ReleaseComObject(occurrence);
-                    }
-                }
-
-                return results;
+                occurrences = GetProperty(document, "Occurrences");
+                return ReadOccurrences(occurrences);
             }
             catch (COMException ex)
             {
@@ -65,6 +34,160 @@ namespace SEBatchReplace
                 ReleaseComObject(document);
                 ReleaseComObject(application);
             }
+        }
+
+        // Opens the requested assembly only when it is not already open.
+        // A document opened by this method is closed without saving after reading.
+        // A document that was already open is left open and untouched.
+        public static IList<string> OpenReadAndCloseAssembly(string filePath)
+        {
+            if (String.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+                throw new FileNotFoundException("找不到指定的組立檔。", filePath);
+
+            object application = null;
+            object documents = null;
+            object document = null;
+            object occurrences = null;
+            bool openedByThisMethod = false;
+            bool closeAttempted = false;
+
+            try
+            {
+                application = Marshal.GetActiveObject("SolidEdge.Application");
+                documents = GetProperty(application, "Documents");
+
+                document = FindOpenDocument(documents, filePath);
+                if (document == null)
+                {
+                    document = OpenDocument(documents, filePath);
+                    openedByThisMethod = true;
+                }
+
+                occurrences = GetProperty(document, "Occurrences");
+                IList<string> results = ReadOccurrences(occurrences);
+                ReleaseComObject(occurrences);
+                occurrences = null;
+
+                if (openedByThisMethod)
+                {
+                    closeAttempted = true;
+                    InvokeMethod(document, "Close", new object[] { false });
+                    ReleaseComObject(document);
+                    document = null;
+                }
+
+                return results;
+            }
+            catch (Exception ex)
+            {
+                if (openedByThisMethod && document != null && !closeAttempted)
+                {
+                    try
+                    {
+                        InvokeMethod(document, "Close", new object[] { false });
+                    }
+                    catch
+                    {
+                        // Preserve the original diagnostic. The caller is told that close may need manual attention.
+                    }
+                }
+
+                throw new InvalidOperationException(
+                    "自動開啟／讀取／關閉組立時失敗。檔案：" + filePath +
+                    (openedByThisMethod ? "；此文件由工具開啟。" : "；此文件原本已開啟，工具不會主動關閉它。") +
+                    " 原因：" + ex.Message, ex);
+            }
+            finally
+            {
+                ReleaseComObject(occurrences);
+                ReleaseComObject(document);
+                ReleaseComObject(documents);
+                ReleaseComObject(application);
+            }
+        }
+
+        private static object FindOpenDocument(object documents, string filePath)
+        {
+            int count = Convert.ToInt32(GetProperty(documents, "Count"));
+            string target = Path.GetFullPath(filePath);
+
+            for (int index = 1; index <= count; index++)
+            {
+                object candidate = null;
+                try
+                {
+                    candidate = GetIndexedProperty(documents, "Item", new object[] { index });
+                    string fullName = Convert.ToString(GetProperty(candidate, "FullName"));
+                    if (!String.IsNullOrWhiteSpace(fullName) &&
+                        String.Equals(Path.GetFullPath(fullName), target, StringComparison.OrdinalIgnoreCase))
+                    {
+                        object match = candidate;
+                        candidate = null;
+                        return match;
+                    }
+                }
+                finally
+                {
+                    ReleaseComObject(candidate);
+                }
+            }
+            return null;
+        }
+
+        private static object OpenDocument(object documents, string filePath)
+        {
+            try
+            {
+                // Documents.Open has one required filename and five optional COM arguments.
+                object[] arguments = new object[]
+                {
+                    filePath,
+                    Type.Missing,
+                    Type.Missing,
+                    Type.Missing,
+                    Type.Missing,
+                    Type.Missing
+                };
+
+                return documents.GetType().InvokeMember(
+                    "Open",
+                    BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
+                    null,
+                    documents,
+                    arguments);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("呼叫 Solid Edge Documents.Open 開啟組立檔失敗。", ex);
+            }
+        }
+
+        private static IList<string> ReadOccurrences(object occurrences)
+        {
+            var results = new List<string>();
+            int count = Convert.ToInt32(GetProperty(occurrences, "Count"));
+
+            for (int index = 1; index <= count; index++)
+            {
+                object occurrence = null;
+                try
+                {
+                    occurrence = GetIndexedProperty(occurrences, "Item", new object[] { index });
+                    string fileName = Convert.ToString(GetProperty(occurrence, "OccurrenceFileName"));
+                    string occurrenceName = Convert.ToString(GetProperty(occurrence, "Name"));
+
+                    if (String.IsNullOrWhiteSpace(fileName))
+                        fileName = "(無法取得零件檔案路徑)";
+
+                    results.Add(index.ToString() + ". " + occurrenceName + " | " +
+                        Path.GetFileName(fileName) + " | " + fileName);
+                }
+                finally
+                {
+                    ReleaseComObject(occurrence);
+                }
+            }
+            return results;
         }
 
         private static object GetProperty(object target, string propertyName)
@@ -89,8 +212,6 @@ namespace SEBatchReplace
         {
             try
             {
-                // Solid Edge collection Item(index) is exposed as an IDispatch method,
-                // not as a normal .NET indexed property.
                 return target.GetType().InvokeMember(
                     propertyName,
                     BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
@@ -102,6 +223,23 @@ namespace SEBatchReplace
             {
                 throw new InvalidOperationException(
                     "存取 Solid Edge COM 索引成員 '" + propertyName + "' 失敗。", ex);
+            }
+        }
+
+        private static object InvokeMethod(object target, string methodName, object[] arguments)
+        {
+            try
+            {
+                return target.GetType().InvokeMember(
+                    methodName,
+                    BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
+                    null,
+                    target,
+                    arguments);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("呼叫 Solid Edge COM 方法 '" + methodName + "' 失敗。", ex);
             }
         }
 

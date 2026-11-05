@@ -131,6 +131,13 @@ namespace SEBatchReplace
                 Height = 32
             };
             readButton.Click += ReadActiveAssembly;
+            var autoReadButton = new Button
+            {
+                Text = "自動開啟組立測試",
+                Width = 170,
+                Height = 32
+            };
+            autoReadButton.Click += AutoReadSelectedAssembly;
             var executeHint = new Label
             {
                 Text = "先在 Solid Edge 開啟 .asm，再讀取結構",
@@ -140,6 +147,7 @@ namespace SEBatchReplace
             };
             executePanel.Controls.Add(executeButton);
             executePanel.Controls.Add(readButton);
+            executePanel.Controls.Add(autoReadButton);
             executePanel.Controls.Add(executeHint);
             root.Controls.Add(executePanel, 0, 4);
 
@@ -200,6 +208,47 @@ namespace SEBatchReplace
                 string details = GetExceptionDetails(ex);
                 AppendLog("讀取失敗： " + details);
                 MessageBox.Show(this, details, "Solid Edge 讀取失敗（診斷資訊）", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        private void AutoReadSelectedAssembly(object sender, EventArgs e)
+        {
+            if (String.IsNullOrWhiteSpace(_folderTextBox.Text))
+            {
+                MessageBox.Show(this, "請先選擇組立根資料夾。", "尚未選擇資料夾", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (_assemblyList.SelectedIndex < 0)
+            {
+                MessageBox.Show(this, "請先在上方組立清單選擇一個 .asm 檔案。", "尚未選擇組立", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string rootPath = _folderTextBox.Text.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string relativePath = Convert.ToString(_assemblyList.SelectedItem);
+            string assemblyPath = Path.GetFullPath(Path.Combine(rootPath, relativePath));
+
+            try
+            {
+                AppendLog("開始自動開啟組立：" + relativePath);
+                IList<string> occurrences = SolidEdgeReader.OpenReadAndCloseAssembly(assemblyPath);
+                AppendLog("讀取完成：取得 " + occurrences.Count + " 個第一層參照。");
+                foreach (string item in occurrences)
+                    AppendLog(item);
+
+                AppendLog("自動開啟／讀取／關閉測試完成。原始檔未修改、未儲存。");
+                MessageBox.Show(this,
+                    "測試完成。\r\n組立：" + relativePath +
+                    "\r\n第一層參照數：" + occurrences.Count +
+                    "\r\n\r\n若此文件原本未開啟，工具已在讀取後以不儲存方式關閉。\r\n若文件原本已開啟，工具會保留開啟狀態。",
+                    "自動開啟測試完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                string details = GetExceptionDetails(ex);
+                AppendLog("自動開啟測試失敗：" + details);
+                MessageBox.Show(this, details, "自動開啟測試失敗（診斷資訊）", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
 

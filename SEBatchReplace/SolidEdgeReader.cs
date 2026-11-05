@@ -37,7 +37,7 @@ namespace SEBatchReplace
                     object occurrence = null;
                     try
                     {
-                        occurrence = InvokeMethod(occurrences, "Item", new object[] { index });
+                        occurrence = GetIndexedProperty(occurrences, "Item", new object[] { index });
                         string fileName = Convert.ToString(GetProperty(occurrence, "OccurrenceFileName"));
                         string occurrenceName = Convert.ToString(GetProperty(occurrence, "Name"));
 
@@ -77,11 +77,11 @@ namespace SEBatchReplace
                 null);
         }
 
-        private static object InvokeMethod(object target, string methodName, object[] arguments)
+        private static object GetIndexedProperty(object target, string propertyName, object[] arguments)
         {
             return target.GetType().InvokeMember(
-                methodName,
-                BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
+                propertyName,
+                BindingFlags.GetProperty | BindingFlags.Public | BindingFlags.Instance,
                 null,
                 target,
                 arguments);

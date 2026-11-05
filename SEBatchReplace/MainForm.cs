@@ -22,6 +22,7 @@ namespace SEBatchReplace
         private Button _apiProbeButton;
         private Button _singleReplaceTestButton;
         private Button _saveReopenTestButton;
+        private Button _saveOnlyTestButton;
         private Button _occurrenceListButton;
         private readonly List<ReplacementMapping> _mappings = new List<ReplacementMapping>();
 
@@ -239,6 +240,15 @@ namespace SEBatchReplace
             };
             _saveReopenTestButton.Click += SingleOccurrenceSaveReopenTest;
 
+            _saveOnlyTestButton = new Button
+            {
+                Text = "背景 Save 單獨測試",
+                Width = 190,
+                Height = 30,
+                Margin = new Padding(4, 0, 4, 0)
+            };
+            _saveOnlyTestButton.Click += BackgroundSaveOnlyTest;
+
             var testButtonsPanel = new FlowLayoutPanel
             {
                 Dock = DockStyle.Fill,
@@ -247,6 +257,7 @@ namespace SEBatchReplace
                 Margin = new Padding(0),
                 Padding = new Padding(0)
             };
+            testButtonsPanel.Controls.Add(_saveOnlyTestButton);
             testButtonsPanel.Controls.Add(_saveReopenTestButton);
             testButtonsPanel.Controls.Add(_singleReplaceTestButton);
             testButtonsPanel.Controls.Add(_occurrenceListButton);
@@ -606,6 +617,66 @@ namespace SEBatchReplace
                 UseWaitCursor = false;
                 _saveReopenTestButton.Enabled = true;
                 AppendLog("========== 單一 occurrence 替換＋儲存重開測試結束 ==========");
+            }
+        }
+
+        private void BackgroundSaveOnlyTest(object sender, EventArgs e)
+        {
+            if (_assemblyList.SelectedItem == null)
+            {
+                MessageBox.Show(this, "請先選擇一個測試用 .asm 組立檔。", "尚未選擇組立", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            if (String.IsNullOrWhiteSpace(_folderTextBox.Text) || !Directory.Exists(_folderTextBox.Text))
+            {
+                MessageBox.Show(this, "請先選擇有效的組立根資料夾。", "尚未選擇資料夾", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string relativePath = Convert.ToString(_assemblyList.SelectedItem);
+            string assemblyPath = Path.Combine(_folderTextBox.Text, relativePath);
+            if (!File.Exists(assemblyPath))
+            {
+                MessageBox.Show(this, "找不到選取的組立檔：" + assemblyPath, "檔案不存在", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            DialogResult confirmation = MessageBox.Show(this,
+                "這項測試會以背景模式開啟選取的組立，完全不執行零件替換，只單獨呼叫 AssemblyDocument.Save()。
+" +
+                "Save 成功或失敗都能幫助判斷：問題是否在背景開啟模式本身。
+
+" +
+                "請選擇已複製的測試副本。雖然不修改模型，但 Save 仍可能更新檔案資訊。
+
+組立檔：" + assemblyPath +
+                "
+
+是否繼續？",
+                "確認背景 Save 單獨測試", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            if (confirmation != DialogResult.Yes) return;
+
+            _saveOnlyTestButton.Enabled = false;
+            UseWaitCursor = true;
+            AppendLog("========== 開始背景 Save 單獨測試（不替換） ==========");
+            AppendLog("[測試組立] " + relativePath);
+            try
+            {
+                IList<string> lines = SolidEdgeReader.TestBackgroundSaveWithoutChanges(assemblyPath);
+                foreach (string line in lines) AppendLog(line);
+                MessageBox.Show(this, "背景 Save 單獨測試已完成。請查看作業紀錄。", "Save 測試完成",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                AppendLog("[背景 Save 單獨測試失敗] " + GetExceptionDetails(ex).Replace(Environment.NewLine, " | "));
+                MessageBox.Show(this, ex.Message, "背景 Save 單獨測試失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                UseWaitCursor = false;
+                _saveOnlyTestButton.Enabled = true;
+                AppendLog("========== 背景 Save 單獨測試結束 ==========");
             }
         }
 

@@ -439,16 +439,14 @@ namespace SEBatchReplace
 
                 FileAttributes attributes = File.GetAttributes(assemblyPath);
                 bool isReadOnly = (attributes & FileAttributes.ReadOnly) == FileAttributes.ReadOnly;
-                output.Add("[測試模式] 背景開啟 JDOCUMENTPROP_NOWINDOW=8；不執行 Replace；直接呼叫 Save。");
+                output.Add("[測試模式] 隱藏 Solid Edge 主視窗；使用一般 Documents.Open（不傳 NOWINDOW=8）；不執行 Replace；直接呼叫 Save。");
                 output.Add("[檔案唯讀屬性] " + (isReadOnly ? "是" : "否"));
                 output.Add("[組立檔] " + assemblyPath);
                 if (isReadOnly)
                     throw new InvalidOperationException("測試組立檔具有 ReadOnly 屬性，先移除唯讀屬性後再測試。");
 
-                stage = "背景開啟測試組立";
-                document = documents.GetType().InvokeMember("Open",
-                    BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
-                    null, documents, new object[] { assemblyPath, (uint)8 });
+                stage = "以一般文件模式開啟測試組立（不建立 NOWINDOW 模式）";
+                document = OpenDocument(documents, assemblyPath);
                 if (document == null) throw new InvalidOperationException("Documents.Open 沒有回傳組立文件。");
                 documentOpened = true;
 
@@ -462,7 +460,7 @@ namespace SEBatchReplace
                 }
                 finally { ReleaseComObject(occurrences); }
 
-                stage = "背景文件 Save（未執行 Replace）";
+                stage = "一般文件模式 Save（未執行 Replace；主視窗維持隱藏）";
                 InvokeMethod(document, "Save", new object[0]);
                 output.Add("[Save 結果] 成功；此測試沒有執行任何零件替換。");
 
@@ -474,7 +472,7 @@ namespace SEBatchReplace
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException("背景 Save 單獨測試失敗。檔案：" + assemblyPath +
+                throw new InvalidOperationException("隱藏主視窗／一般文件模式 Save 測試失敗。檔案：" + assemblyPath +
                     "；失敗階段：" + stage +
                     (documentOpened ? "；文件可能仍開啟，請檢查 Solid Edge。" : "") +
                     "；原因：" + ex.Message, ex);

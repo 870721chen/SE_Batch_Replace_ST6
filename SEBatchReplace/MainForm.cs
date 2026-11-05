@@ -15,6 +15,7 @@ namespace SEBatchReplace
         private RadioButton _stopRadio;
         private TextBox _logTextBox;
         private Button _revisionReadButton;
+        private Button _asmScanButton;
         private readonly List<ReplacementMapping> _mappings = new List<ReplacementMapping>();
 
         public MainForm()
@@ -179,13 +180,21 @@ namespace SEBatchReplace
                 Height = 32
             };
             _revisionReadButton.Click += RevisionManagerReadAllAssemblies;
+            _asmScanButton = new Button
+            {
+                Text = "ASM 參照初篩（不開啟 Solid Edge）",
+                Width = 250,
+                Height = 32
+            };
+            _asmScanButton.Click += ScanAssemblyReferences;
             var hint = new Label
             {
-                Text = "逐一讀取資料夾內所有 .asm；唯讀，不修改、不儲存檔案。",
+                Text = "唯讀二進位掃描；初篩結果需與 Solid Edge 讀取結果比對。",
                 AutoSize = true,
                 Padding = new Padding(8, 8, 0, 0)
             };
             testPanel.Controls.Add(_revisionReadButton);
+            testPanel.Controls.Add(_asmScanButton);
             testPanel.Controls.Add(hint);
             root.Controls.Add(testPanel, 0, 3);
 
@@ -237,6 +246,90 @@ namespace SEBatchReplace
                 AppendLog("掃描失敗：" + ex.Message);
                 MessageBox.Show(this, ex.Message, "掃描失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private void ScanAssemblyReferences(object sender, EventArgs e)
+        {
+            if (String.IsNullOrWhiteSpace(_folderTextBox.Text) || !Directory.Exists(_folderTextBox.Text))
+            {
+                MessageBox.Show(this, "請先選擇有效的組立根資料夾。", "尚未選擇資料夾", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            if (_mappings.Count == 0)
+            {
+                MessageBox.Show(this, "請先新增至少一筆舊零件名稱配對，才能進行參照初篩。", "尚未設定舊零件", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            IList<string> files;
+            try
+            {
+                files = FolderScanner.GetAssemblyFiles(_folderTextBox.Text);
+            }
+            catch (Exception ex)
+            {
+                AppendLog("ASM 參照初篩：資料夾掃描失敗：" + ex.Message);
+                return;
+            }
+
+            int hitFiles = 0;
+            int unreadableFiles = 0;
+            _asmScanButton.Enabled = false;
+            _revisionReadButton.Enabled = false;
+            UseWaitCursor = true;
+            AppendLog("========== 開始 ASM 參照二進位初篩 ==========");
+            AppendLog("組立檔數量：" + files.Count + "；待比對舊零件數量：" + _mappings.Count + "。");
+            AppendLog("只讀取檔案位元組，不啟動 Solid Edge、不修改或儲存檔案。");
+
+            try
+            {
+                for (int i = 0; i < files.Count; i++)
+                {
+                    string file = files[i];
+                    string relative = file.Substring(_folderTextBox.Text.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Length)
+                        .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                    try
+                    {
+                        AsmReferenceScanResult result = AsmReferenceScanner.Scan(file, GetOldPartNames());
+                        if (result.Matches.Count > 0)
+                        {
+                            hitFiles++;
+                            AppendLog("[命中] " + relative + "；格式辨識：" + result.FileFormat + "；檔案大小：" + result.FileLength + " bytes");
+                            foreach (AsmReferenceMatch match in result.Matches)
+                                AppendLog("  [參照文字] " + match.PartName + "；編碼：" + match.EncodingName +
+                                    "；位元組位置：" + String.Join(", ", match.Offsets) +
+                                    (match.Truncated ? "；位置僅列前 10 筆" : ""));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        unreadableFiles++;
+                        AppendLog("[掃描失敗] " + relative + "；" + ex.Message);
+                    }
+                }
+            }
+            finally
+            {
+                UseWaitCursor = false;
+                _asmScanButton.Enabled = true;
+                _revisionReadButton.Enabled = true;
+            }
+
+            AppendLog("========== ASM 參照二進位初篩結束 ==========");
+            AppendLog("組立檔：" + files.Count + "；文字命中組立：" + hitFiles + "；讀取失敗：" + unreadableFiles + "。");
+            AppendLog("注意：命中代表檔案原始位元組中找到檔名文字，不等於 occurrence 數；未命中也不能證明組立沒有參照。");
+            MessageBox.Show(this, "ASM 參照初篩完成。\r\n組立檔：" + files.Count +
+                "\r\n文字命中組立：" + hitFiles + "\r\n讀取失敗：" + unreadableFiles +
+                "\r\n\r\n詳細結果請查看作業紀錄。\r\n本次沒有修改任何檔案。",
+                "ASM 參照初篩完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private IList<string> GetOldPartNames()
+        {
+            var names = new List<string>();
+            foreach (ReplacementMapping mapping in _mappings)
+                names.Add(mapping.OldPartName);
+            return names;
         }
 
         private void RevisionManagerReadAllAssemblies(object sender, EventArgs e)

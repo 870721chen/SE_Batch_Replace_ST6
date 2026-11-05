@@ -14,6 +14,8 @@ namespace SEBatchReplace
         private RadioButton _skipRadio;
         private RadioButton _stopRadio;
         private TextBox _logTextBox;
+        private ComboBox _readScopeComboBox;
+        private Label _readScopeDescriptionLabel;
         private Button _revisionReadButton;
         private Button _asmScanButton;
         private Button _backgroundOpenButton;
@@ -163,69 +165,53 @@ namespace SEBatchReplace
             configurationPanel.Controls.Add(policyGroup, 1, 0);
             root.Controls.Add(configurationPanel, 0, 2);
 
-            var testPanel = new FlowLayoutPanel
+            var readScopePanel = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = true,
-                Padding = new Padding(0, 6, 0, 0)
+                ColumnCount = 3,
+                RowCount = 1,
+                Padding = new Padding(0, 8, 0, 0),
+                Margin = new Padding(0)
             };
-            _revisionReadButton = new Button
+            readScopePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105F));
+            readScopePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230F));
+            readScopePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+
+            var readScopeLabel = new Label
             {
-                Text = "Revision Manager 讀取測試（全部組立）",
-                Width = 260,
-                Height = 32
-            };
-            _revisionReadButton.Click += RevisionManagerReadAllAssemblies;
-            _asmScanButton = new Button
-            {
-                Text = "ASM 參照初篩（不開啟 Solid Edge）",
-                Width = 250,
-                Height = 32
-            };
-            _asmScanButton.Click += ScanAssemblyReferences;
-            _backgroundOpenButton = new Button
-            {
-                Text = "背景開啟測試（不顯示視窗）",
-                Width = 230,
-                Height = 32
-            };
-            _backgroundOpenButton.Click += BackgroundOpenSelectedAssembly;
-            _apiProbeButton = new Button
-            {
-                Text = "COM API 成員診斷（唯讀）",
-                Width = 220,
-                Height = 32
-            };
-            _apiProbeButton.Click += ProbeAssemblyApiMembers;
-            _singleReplaceTestButton = new Button
-            {
-                Text = "單一 occurrence 替換測試（不儲存）",
-                Width = 250,
-                Height = 32
-            };
-            _singleReplaceTestButton.Click += SingleOccurrenceReplaceTest;
-            _occurrenceListButton = new Button
-            {
-                Text = "列出第一層 occurrence（唯讀）",
-                Width = 230,
-                Height = 32
-            };
-            _occurrenceListButton.Click += ListFirstLevelOccurrences;
-            var hint = new Label
-            {
-                Text = "使用測試副本；單一替換測試不儲存。",
+                Text = "讀取範圍：",
                 AutoSize = true,
-                Padding = new Padding(8, 8, 0, 0)
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(0, 0, 6, 0)
             };
-            testPanel.Controls.Add(_revisionReadButton);
-            testPanel.Controls.Add(_asmScanButton);
-            testPanel.Controls.Add(_backgroundOpenButton);
-            testPanel.Controls.Add(_apiProbeButton);
-            testPanel.Controls.Add(_singleReplaceTestButton);
-            testPanel.Controls.Add(_occurrenceListButton);
-            testPanel.Controls.Add(hint);
-            root.Controls.Add(testPanel, 0, 3);
+            _readScopeComboBox = new ComboBox
+            {
+                Dock = DockStyle.Fill,
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Margin = new Padding(0)
+            };
+            _readScopeComboBox.Items.Add("主組立第一層（預設）");
+            _readScopeComboBox.Items.Add("完整階層");
+            _readScopeComboBox.SelectedIndex = 0;
+
+            _readScopeDescriptionLabel = new Label
+            {
+                Text = "只讀取主組立直接包含的零件與子組立，不展開子組立。",
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(12, 0, 0, 0)
+            };
+            _readScopeComboBox.SelectedIndexChanged += delegate
+            {
+                _readScopeDescriptionLabel.Text = _readScopeComboBox.SelectedIndex == 1
+                    ? "遞迴讀取所有子組立中的零件與更深層組立。"
+                    : "只讀取主組立直接包含的零件與子組立，不展開子組立。";
+            };
+
+            readScopePanel.Controls.Add(readScopeLabel, 0, 0);
+            readScopePanel.Controls.Add(_readScopeComboBox, 1, 0);
+            readScopePanel.Controls.Add(_readScopeDescriptionLabel, 2, 0);
+            root.Controls.Add(readScopePanel, 0, 3);
 
             var logGroup = new GroupBox { Text = "作業紀錄", Dock = DockStyle.Fill };
             _logTextBox = new TextBox
@@ -239,7 +225,7 @@ namespace SEBatchReplace
             logGroup.Controls.Add(_logTextBox);
             root.Controls.Add(logGroup, 0, 4);
 
-            AppendLog("請選擇組立根資料夾，建立舊零件與新零件配對，再執行目前的唯讀讀取測試。");
+            AppendLog("請選擇組立根資料夾，建立舊零件與新零件配對，並設定讀取範圍。");
         }
 
         private void BrowseFolder(object sender, EventArgs e)

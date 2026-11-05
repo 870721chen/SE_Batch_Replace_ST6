@@ -27,13 +27,6 @@ namespace SEBatchReplace
             Font = new Font("Segoe UI", 9F);
             BuildInterface();
 
-            // 預設使用正式量產機種資料夾；若目前電腦可連線，啟動時自動載入組立清單。
-            const string defaultAssemblyFolder = @"\\1f\共用資料\0正式圖檔\0 量產機種";
-            _folderTextBox.Text = defaultAssemblyFolder;
-            if (Directory.Exists(defaultAssemblyFolder))
-                LoadAssemblyFolder(defaultAssemblyFolder);
-            else
-                AppendLog("已設定預設組立資料夾，但目前無法存取：" + defaultAssemblyFolder);
         }
 
         private void BuildInterface()
@@ -218,6 +211,10 @@ namespace SEBatchReplace
             using (var dialog = new FolderBrowserDialog())
             {
                 dialog.Description = "選擇包含 Solid Edge .asm 組立檔的資料夾";
+                const string defaultAssemblyFolder = @"\\1f\共用資料\0正式圖檔\0 量產機種";
+                if (Directory.Exists(defaultAssemblyFolder))
+                    dialog.SelectedPath = defaultAssemblyFolder;
+
                 if (dialog.ShowDialog(this) != DialogResult.OK)
                     return;
 

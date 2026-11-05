@@ -17,6 +17,7 @@ namespace SEBatchReplace
         private Button _revisionReadButton;
         private Button _asmScanButton;
         private Button _backgroundOpenButton;
+        private Button _apiProbeButton;
         private readonly List<ReplacementMapping> _mappings = new List<ReplacementMapping>();
 
         public MainForm()
@@ -188,6 +189,13 @@ namespace SEBatchReplace
                 Height = 32
             };
             _backgroundOpenButton.Click += BackgroundOpenSelectedAssembly;
+            _apiProbeButton = new Button
+            {
+                Text = "COM API 成員診斷（唯讀）",
+                Width = 220,
+                Height = 32
+            };
+            _apiProbeButton.Click += ProbeAssemblyApiMembers;
             var hint = new Label
             {
                 Text = "唯讀初篩；確認後才進行替換。",
@@ -197,6 +205,7 @@ namespace SEBatchReplace
             testPanel.Controls.Add(_revisionReadButton);
             testPanel.Controls.Add(_asmScanButton);
             testPanel.Controls.Add(_backgroundOpenButton);
+            testPanel.Controls.Add(_apiProbeButton);
             testPanel.Controls.Add(hint);
             root.Controls.Add(testPanel, 0, 3);
 
@@ -304,6 +313,56 @@ namespace SEBatchReplace
                 UseWaitCursor = false;
                 _backgroundOpenButton.Enabled = true;
                 AppendLog("========== Solid Edge 背景開啟測試結束 ==========");
+            }
+        }
+
+
+        private void ProbeAssemblyApiMembers(object sender, EventArgs e)
+        {
+            if (String.IsNullOrWhiteSpace(_folderTextBox.Text) || !Directory.Exists(_folderTextBox.Text))
+            {
+                MessageBox.Show(this, "請先選擇有效的組立根資料夾。", "尚未選擇資料夾", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            if (_assemblyList.SelectedIndex < 0)
+            {
+                MessageBox.Show(this, "請先在組立清單選取一個測試用 .asm 檔案。", "尚未選取組立", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string relativePath = Convert.ToString(_assemblyList.SelectedItem);
+            string assemblyPath = Path.Combine(_folderTextBox.Text, relativePath);
+            if (!File.Exists(assemblyPath))
+            {
+                MessageBox.Show(this, "找不到選取的組立檔：" + assemblyPath, "檔案不存在", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            _apiProbeButton.Enabled = false;
+            UseWaitCursor = true;
+            AppendLog("========== 開始 Solid Edge COM API 成員診斷 ==========");
+            AppendLog("[API 診斷] " + relativePath);
+            AppendLog("唯讀模式：隱藏 Solid Edge，背景開啟組立；只讀取 COM TypeInfo，不呼叫替換、修改或儲存。");
+            try
+            {
+                IList<string> lines = SolidEdgeReader.ProbeAssemblyApiInBackground(assemblyPath);
+                foreach (string line in lines)
+                    AppendLog(line);
+                MessageBox.Show(this,
+                    "COM API 成員診斷完成。\r\n組立：" + relativePath +
+                    "\r\n診斷結果已寫入作業紀錄。\r\n本次未修改或儲存任何檔案。",
+                    "API 診斷完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                AppendLog("[API 診斷失敗] " + GetExceptionDetails(ex).Replace(Environment.NewLine, " | "));
+                MessageBox.Show(this, ex.Message, "API 診斷失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                UseWaitCursor = false;
+                _apiProbeButton.Enabled = true;
+                AppendLog("========== Solid Edge COM API 成員診斷結束 ==========");
             }
         }
 

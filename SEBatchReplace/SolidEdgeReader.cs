@@ -37,6 +37,126 @@ namespace SEBatchReplace
             }
         }
 
+        // Opens an assembly without creating a document window, while temporarily hiding
+        // the Solid Edge main window. Reads first-level occurrences only and never saves.
+        public static IList<string> OpenReadAndCloseAssemblyInBackground(string filePath)
+        {
+            if (String.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+                throw new FileNotFoundException("找不到指定的組立檔。", filePath);
+
+            object application = null;
+            object documents = null;
+            object existingDocument = null;
+            object document = null;
+            object occurrences = null;
+            bool createdApplication = false;
+            bool originalVisible = true;
+            bool visibilityCaptured = false;
+            bool documentOpened = false;
+            bool closeAttempted = false;
+            string stage = "連接或啟動 Solid Edge";
+
+            try
+            {
+                try
+                {
+                    application = Marshal.GetActiveObject("SolidEdge.Application");
+                }
+                catch
+                {
+                    Type applicationType = Type.GetTypeFromProgID("SolidEdge.Application");
+                    if (applicationType == null)
+                        throw new InvalidOperationException("系統未註冊 SolidEdge.Application。請確認 Solid Edge ST6 已安裝並完成 COM 註冊。");
+                    application = Activator.CreateInstance(applicationType);
+                    createdApplication = true;
+                }
+
+                stage = "讀取 Solid Edge 原本的顯示狀態";
+                originalVisible = Convert.ToBoolean(GetProperty(application, "Visible"));
+                visibilityCaptured = true;
+
+                stage = "隱藏 Solid Edge 主視窗";
+                SetProperty(application, "Visible", false);
+
+                stage = "取得 Solid Edge Documents 集合";
+                documents = GetProperty(application, "Documents");
+
+                stage = "確認測試組立尚未開啟";
+                existingDocument = FindOpenDocument(documents, filePath);
+                if (existingDocument != null)
+                    throw new InvalidOperationException("這個組立目前已經在 Solid Edge 中開啟。請先關閉該組立，再執行背景開啟測試，以免測試到既有視窗。");
+
+                stage = "使用 JDOCUMENTPROP_NOWINDOW=8 背景開啟組立";
+                document = documents.GetType().InvokeMember(
+                    "Open",
+                    BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
+                    null,
+                    documents,
+                    new object[] { filePath, (uint)8 });
+                if (document == null)
+                    throw new InvalidOperationException("Documents.Open 沒有回傳文件物件。");
+                documentOpened = true;
+
+                stage = "取得背景組立 Occurrences";
+                occurrences = GetProperty(document, "Occurrences");
+                stage = "讀取背景組立第一層 Occurrences";
+                IList<string> results = ReadOccurrencesFirstLevel(occurrences);
+
+                ReleaseComObject(occurrences);
+                occurrences = null;
+
+                stage = "關閉背景組立（不儲存）";
+                closeAttempted = true;
+                InvokeMethod(document, "Close", new object[] { false });
+                documentOpened = false;
+                ReleaseComObject(document);
+                document = null;
+
+                return results;
+            }
+            catch (Exception ex)
+            {
+                if (documentOpened && document != null && !closeAttempted)
+                {
+                    try
+                    {
+                        InvokeMethod(document, "Close", new object[] { false });
+                        documentOpened = false;
+                    }
+                    catch
+                    {
+                        // Keep the original failure; cleanup may need manual attention.
+                    }
+                }
+
+                throw new InvalidOperationException(
+                    "Solid Edge 背景開啟測試失敗。檔案：" + filePath +
+                    "；失敗階段：" + stage +
+                    (documentOpened ? "；文件可能仍留在 Solid Edge 中，請檢查並手動關閉。" : String.Empty) +
+                    "；原因：" + ex.Message, ex);
+            }
+            finally
+            {
+                ReleaseComObject(occurrences);
+                ReleaseComObject(document);
+                ReleaseComObject(existingDocument);
+                ReleaseComObject(documents);
+
+                if (createdApplication && application != null)
+                {
+                    try { InvokeMethod(application, "Quit", new object[0]); }
+                    catch { }
+                }
+                else if (visibilityCaptured && application != null)
+                {
+                    try { SetProperty(application, "Visible", originalVisible); }
+                    catch { }
+                }
+
+                ReleaseComObject(application);
+            }
+        }
+
         // Opens the requested assembly only when it is not already open.
         // A document opened by this method is closed without saving after reading.
         // A document that was already open is left open and untouched.
@@ -315,6 +435,23 @@ namespace SEBatchReplace
             catch
             {
                 return null;
+            }
+        }
+
+        private static void SetProperty(object target, string propertyName, object value)
+        {
+            try
+            {
+                target.GetType().InvokeMember(
+                    propertyName,
+                    BindingFlags.SetProperty | BindingFlags.Public | BindingFlags.Instance,
+                    null,
+                    target,
+                    new object[] { value });
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("設定 Solid Edge COM 成員 '" + propertyName + "' 失敗。", ex);
             }
         }
 

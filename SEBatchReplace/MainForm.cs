@@ -206,7 +206,7 @@ namespace SEBatchReplace
             _singleReplaceTestButton.Click += SingleOccurrenceReplaceTest;
             var hint = new Label
             {
-                Text = "唯讀初篩；確認後才進行替換。",
+                Text = "使用測試副本；單一替換測試不儲存。",
                 AutoSize = true,
                 Padding = new Padding(8, 8, 0, 0)
             };

@@ -1,0 +1,11 @@
+.vs/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+*.user
+*.suo
+*.cache
+*.pdb
+*.exe
+packages/
+TestResults/

@@ -242,7 +242,7 @@ namespace SEBatchReplace
 
             _saveOnlyTestButton = new Button
             {
-                Text = "背景 Save 單獨測試",
+                Text = "隱藏視窗 Save 測試",
                 Width = 190,
                 Height = 30,
                 Margin = new Padding(4, 0, 4, 0)
@@ -642,8 +642,8 @@ namespace SEBatchReplace
             }
 
             DialogResult confirmation = MessageBox.Show(this,
-                "這項測試會以背景模式開啟選取的組立，完全不執行零件替換，只單獨呼叫 AssemblyDocument.Save()。\r\n" +
-                "Save 成功或失敗都能幫助判斷：問題是否在背景開啟模式本身。\r\n\r\n" +
+                "這項測試會隱藏 Solid Edge 主視窗，但使用一般 Documents.Open（不使用 NOWINDOW=8）開啟組立。\r\n" +
+                "完全不執行零件替換，只單獨呼叫 AssemblyDocument.Save()，用來確認 Save 是否受 NOWINDOW 開啟選項影響。\r\n\r\n" +
                 "請選擇已複製的測試副本。雖然不修改模型，但 Save 仍可能更新檔案資訊。\r\n\r\n組立檔：" + assemblyPath +
                 "\r\n\r\n是否繼續？",
                 "確認背景 Save 單獨測試", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
@@ -651,25 +651,25 @@ namespace SEBatchReplace
 
             _saveOnlyTestButton.Enabled = false;
             UseWaitCursor = true;
-            AppendLog("========== 開始背景 Save 單獨測試（不替換） ==========");
+            AppendLog("========== 開始隱藏視窗／一般文件模式 Save 測試（不替換） ==========");
             AppendLog("[測試組立] " + relativePath);
             try
             {
                 IList<string> lines = SolidEdgeReader.TestBackgroundSaveWithoutChanges(assemblyPath);
                 foreach (string line in lines) AppendLog(line);
-                MessageBox.Show(this, "背景 Save 單獨測試已完成。請查看作業紀錄。", "Save 測試完成",
+                MessageBox.Show(this, "隱藏視窗 Save 測試已完成。請查看作業紀錄。", "Save 測試完成",
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                AppendLog("[背景 Save 單獨測試失敗] " + GetExceptionDetails(ex).Replace(Environment.NewLine, " | "));
-                MessageBox.Show(this, ex.Message, "背景 Save 單獨測試失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                AppendLog("[隱藏視窗 Save 測試失敗] " + GetExceptionDetails(ex).Replace(Environment.NewLine, " | "));
+                MessageBox.Show(this, ex.Message, "隱藏視窗 Save 測試失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
                 UseWaitCursor = false;
                 _saveOnlyTestButton.Enabled = true;
-                AppendLog("========== 背景 Save 單獨測試結束 ==========");
+                AppendLog("========== 隱藏視窗／一般文件模式 Save 測試結束 ==========");
             }
         }
 

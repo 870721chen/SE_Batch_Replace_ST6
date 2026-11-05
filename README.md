@@ -37,6 +37,12 @@ Solid Edge COM 已加入唯讀組立結構讀取，使用者可自行選擇「�
 - 任何無法確認的關聯狀態都不得回報為成功。
 - 開發階段不會自動覆寫使用者原始組立檔。
 
+## Revision Manager 讀取測試（實驗功能）
+
+新增獨立的「Revision Manager 讀取測試」按鈕。先在組立清單選取一個 .asm，再執行測試。程式透過 RevisionManager.Application 開啟該組立，讀取 LinkedDocuments 的直接連結清單；不呼叫 Save、Replace 或其他連結修改方法，也不會呼叫 Solid Edge 主程式的 Documents.Open。
+
+此功能目前是實驗性讀取測試，尚未由 Solid Edge ST6 實機驗證，也尚未遞迴展開子組立。請先使用測試資料副本。測試結果需與「自動開啟組立測試」讀取結果逐筆比較，確認完整性與速度後，才考慮用於大量 .asm 預覽。
+
 ## 編譯
 
 GitHub Actions 需由使用者手動觸發編譯：

@@ -8,7 +8,7 @@ namespace SEBatchReplace
 {
     public static class SolidEdgeReader
     {
-        public static IList<string> ReadActiveAssemblyOccurrences()
+        public static IList<string> ReadActiveAssemblyOccurrences(bool includeNested)
         {
             object application = null;
             object document = null;
@@ -22,7 +22,7 @@ namespace SEBatchReplace
 
                 occurrences = GetProperty(document, "Occurrences");
                 string rootPath = Convert.ToString(GetProperty(document, "FullName"));
-                return ReadOccurrencesRecursive(occurrences, 0, rootPath, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+                return includeNested ? ReadOccurrencesRecursive(occurrences, 0, rootPath, new HashSet<string>(StringComparer.OrdinalIgnoreCase)) : ReadOccurrencesFirstLevel(occurrences);
             }
             catch (COMException ex)
             {
@@ -40,7 +40,7 @@ namespace SEBatchReplace
         // Opens the requested assembly only when it is not already open.
         // A document opened by this method is closed without saving after reading.
         // A document that was already open is left open and untouched.
-        public static IList<string> OpenReadAndCloseAssembly(string filePath)
+        public static IList<string> OpenReadAndCloseAssembly(string filePath, bool includeNested)
         {
             if (String.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
                 throw new FileNotFoundException("找不到指定的組立檔。", filePath);
@@ -70,8 +70,8 @@ namespace SEBatchReplace
 
                 stage = "取得組立 Occurrences";
                 occurrences = GetProperty(document, "Occurrences");
-                stage = "讀取完整組立階層";
-                IList<string> results = ReadOccurrencesRecursive(occurrences, 0, filePath, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+                stage = includeNested ? "讀取完整組立階層" : "讀取主組立第一層";
+                IList<string> results = includeNested ? ReadOccurrencesRecursive(occurrences, 0, filePath, new HashSet<string>(StringComparer.OrdinalIgnoreCase)) : ReadOccurrencesFirstLevel(occurrences);
                 ReleaseComObject(occurrences);
                 occurrences = null;
 
@@ -171,6 +171,32 @@ namespace SEBatchReplace
             }
         }
 
+        // Reads direct occurrences only. Subassemblies are listed but not expanded.
+        private static IList<string> ReadOccurrencesFirstLevel(object occurrences)
+        {
+            var results = new List<string>();
+            int count = Convert.ToInt32(GetProperty(occurrences, "Count"));
+            for (int index = 1; index <= count; index++)
+            {
+                object occurrence = null;
+                try
+                {
+                    occurrence = GetIndexedProperty(occurrences, "Item", new object[] { index });
+                    string fileName = Convert.ToString(GetProperty(occurrence, "OccurrenceFileName"));
+                    string occurrenceName = Convert.ToString(GetProperty(occurrence, "Name"));
+                    bool isSubassembly = Convert.ToBoolean(GetProperty(occurrence, "Subassembly"));
+                    if (String.IsNullOrWhiteSpace(fileName)) fileName = "(無法取得零件檔案路徑)";
+                    string itemType = isSubassembly ? "[子組立，未展開]" : "[零件]";
+                    results.Add(index.ToString() + ". " + itemType + " " + occurrenceName + " | " + Path.GetFileName(fileName) + " | " + fileName);
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException("讀取主組立第一層第 " + index + " 個參照時失敗。" + (occurrence == null ? String.Empty : " 參照：" + SafeGetOccurrenceName(occurrence)) + "；原因：" + ex.Message, ex);
+                }
+                finally { ReleaseComObject(occurrence); }
+            }
+            return results;
+        }
         private static IList<string> ReadOccurrencesRecursive(
             object occurrences,
             int depth,

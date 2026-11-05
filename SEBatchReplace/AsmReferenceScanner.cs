@@ -65,7 +65,10 @@ namespace SEBatchReplace
                         continue;
 
                     string normalized = Path.GetFileName(partName.Trim());
-                    string searchText = normalized + " ";
+                    string searchName = normalized.EndsWith(".par", StringComparison.OrdinalIgnoreCase)
+                        ? normalized.Substring(0, normalized.Length - 4)
+                        : normalized;
+                    string searchText = searchName + " ";
                     byte[] ascii = TryGetAsciiBytes(searchText);
                     if (ascii != null)
                         searches.Add(CreateSearch(normalized, "ASCII", ascii));

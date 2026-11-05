@@ -25,6 +25,14 @@ namespace SEBatchReplace
             Size = new Size(1080, 720);
             Font = new Font("Segoe UI", 9F);
             BuildInterface();
+
+            // 預設使用正式量產機種資料夾；若目前電腦可連線，啟動時自動載入組立清單。
+            const string defaultAssemblyFolder = @"\\1f\共用資料\0正式圖檔\0 量產機種";
+            _folderTextBox.Text = defaultAssemblyFolder;
+            if (Directory.Exists(defaultAssemblyFolder))
+                LoadAssemblyFolder(defaultAssemblyFolder);
+            else
+                AppendLog("已設定預設組立資料夾，但目前無法存取：" + defaultAssemblyFolder);
         }
 
         private void BuildInterface()
@@ -205,24 +213,29 @@ namespace SEBatchReplace
                     return;
 
                 _folderTextBox.Text = dialog.SelectedPath;
-                try
+                LoadAssemblyFolder(dialog.SelectedPath);
+            }
+        }
+
+        private void LoadAssemblyFolder(string folderPath)
+        {
+            try
+            {
+                IList<string> files = FolderScanner.GetAssemblyFiles(folderPath);
+                _assemblyList.Items.Clear();
+                string rootPath = folderPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                foreach (string file in files)
                 {
-                    IList<string> files = FolderScanner.GetAssemblyFiles(dialog.SelectedPath);
-                    _assemblyList.Items.Clear();
-                    string rootPath = dialog.SelectedPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                    foreach (string file in files)
-                    {
-                        string relativePath = file.Substring(rootPath.Length)
-                            .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                        _assemblyList.Items.Add(relativePath);
-                    }
-                    AppendLog("遞迴掃描完成：包含所有子資料夾，共找到 " + files.Count + " 個 .asm 檔案。");
+                    string relativePath = file.Substring(rootPath.Length)
+                        .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                    _assemblyList.Items.Add(relativePath);
                 }
-                catch (Exception ex)
-                {
-                    AppendLog("掃描失敗：" + ex.Message);
-                    MessageBox.Show(this, ex.Message, "掃描失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
+                AppendLog("遞迴掃描完成：包含所有子資料夾，共找到 " + files.Count + " 個 .asm 檔案。");
+            }
+            catch (Exception ex)
+            {
+                AppendLog("掃描失敗：" + ex.Message);
+                MessageBox.Show(this, ex.Message, "掃描失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 

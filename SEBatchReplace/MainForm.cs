@@ -32,11 +32,12 @@ namespace SEBatchReplace
             root.Dock = DockStyle.Fill;
             root.Padding = new Padding(12);
             root.ColumnCount = 1;
-            root.RowCount = 5;
+            root.RowCount = 6;
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 48));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 34));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 18));
             Controls.Add(root);
 
@@ -109,10 +110,35 @@ namespace SEBatchReplace
             policyGroup.Controls.Add(_stopRadio);
             root.Controls.Add(policyGroup, 0, 3);
 
+            var executePanel = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.RightToLeft,
+                WrapContents = false,
+                Padding = new Padding(0, 4, 0, 0)
+            };
+            var executeButton = new Button
+            {
+                Text = "開始批次替換（尚未啟用）",
+                Width = 190,
+                Height = 32,
+                Enabled = false
+            };
+            var executeHint = new Label
+            {
+                Text = "待完成 Solid Edge 連線與替換核心後啟用",
+                AutoSize = true,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(0, 8, 8, 0)
+            };
+            executePanel.Controls.Add(executeButton);
+            executePanel.Controls.Add(executeHint);
+            root.Controls.Add(executePanel, 0, 4);
+
             var logGroup = new GroupBox { Text = "作業紀錄", Dock = DockStyle.Fill };
             _logTextBox = new TextBox { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical };
             logGroup.Controls.Add(_logTextBox);
-            root.Controls.Add(logGroup, 0, 4);
+            root.Controls.Add(logGroup, 0, 5);
 
             AppendLog("目前為介面與掃描骨架，尚未連接 Solid Edge，也不會修改任何組立或零件檔。");
         }

@@ -6,7 +6,7 @@ Solid Edge ST6 批次零件替換工具（Windows 桌面程式）。
 
 此 Repository 先建立可由 GitHub Actions 編譯的 Windows Forms 專案骨架。現階段包含資料夾掃描、組立檔清單、手動新舊零件配對介面與錯誤處理策略選擇；**尚未執行 Solid Edge 零件替換**。
 
-Solid Edge COM 目前已加入唯讀遞迴讀取：透過 Occurrence 的 Subassembly 與 OccurrenceDocument 逐層讀取子組立。此功能仍須在 Solid Edge ST6 實機驗證；尚未實作零件替換，也不代表關聯保留／復原能力已驗證。
+Solid Edge COM 已加入唯讀組立結構讀取，使用者可自行選擇「主組立第一層」（預設，只列出子組立、不展開）或「完整階層」（透過 Occurrence 的 Subassembly 與 OccurrenceDocument 逐層讀取子組立）。完整階層讀取仍須在 Solid Edge ST6 實機驗證；尚未實作零件替換，也不代表關聯保留／復原能力已驗證。
 
 ## 目標環境
 

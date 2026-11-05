@@ -168,7 +168,7 @@ namespace SEBatchReplace
             var readScopePanel = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                ColumnCount = 3,
+                ColumnCount = 4,
                 RowCount = 1,
                 Padding = new Padding(0, 8, 0, 0),
                 Margin = new Padding(0)
@@ -176,6 +176,7 @@ namespace SEBatchReplace
             readScopePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105F));
             readScopePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230F));
             readScopePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            readScopePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220F));
 
             var readScopeLabel = new Label
             {
@@ -208,9 +209,18 @@ namespace SEBatchReplace
                     : "只讀取主組立直接包含的零件與子組立，不展開子組立。";
             };
 
+            _occurrenceListButton = new Button
+            {
+                Text = "列出第一層 occurrence（唯讀）",
+                Dock = DockStyle.Fill,
+                Margin = new Padding(8, 0, 0, 0)
+            };
+            _occurrenceListButton.Click += ListFirstLevelOccurrences;
+
             readScopePanel.Controls.Add(readScopeLabel, 0, 0);
             readScopePanel.Controls.Add(_readScopeComboBox, 1, 0);
             readScopePanel.Controls.Add(_readScopeDescriptionLabel, 2, 0);
+            readScopePanel.Controls.Add(_occurrenceListButton, 3, 0);
             root.Controls.Add(readScopePanel, 0, 3);
 
             var logGroup = new GroupBox { Text = "作業紀錄", Dock = DockStyle.Fill };

@@ -21,6 +21,7 @@ namespace SEBatchReplace
         private Button _backgroundOpenButton;
         private Button _apiProbeButton;
         private Button _singleReplaceTestButton;
+        private Button _saveReopenTestButton;
         private Button _occurrenceListButton;
         private readonly List<ReplacementMapping> _mappings = new List<ReplacementMapping>();
 
@@ -168,16 +169,17 @@ namespace SEBatchReplace
             var readScopePanel = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                ColumnCount = 5,
-                RowCount = 1,
-                Padding = new Padding(0, 8, 0, 0),
+                ColumnCount = 4,
+                RowCount = 2,
+                Padding = new Padding(0, 4, 0, 0),
                 Margin = new Padding(0)
             };
             readScopePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105F));
             readScopePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230F));
             readScopePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            readScopePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220F));
-            readScopePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230F));
+            readScopePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 1F));
+            readScopePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32F));
+            readScopePanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
             var readScopeLabel = new Label
             {
@@ -213,24 +215,48 @@ namespace SEBatchReplace
             _occurrenceListButton = new Button
             {
                 Text = "列出第一層 occurrence（唯讀）",
-                Dock = DockStyle.Fill,
-                Margin = new Padding(8, 0, 0, 0)
+                Width = 220,
+                Height = 30,
+                Margin = new Padding(4, 0, 4, 0)
             };
             _occurrenceListButton.Click += ListFirstLevelOccurrences;
 
             _singleReplaceTestButton = new Button
             {
-                Text = "單一 occurrence 替換測試（不儲存）",
-                Dock = DockStyle.Fill,
-                Margin = new Padding(8, 0, 0, 0)
+                Text = "單一 occurrence 替換（不儲存）",
+                Width = 220,
+                Height = 30,
+                Margin = new Padding(4, 0, 4, 0)
             };
             _singleReplaceTestButton.Click += SingleOccurrenceReplaceTest;
+
+            _saveReopenTestButton = new Button
+            {
+                Text = "替換＋儲存重開測試",
+                Width = 220,
+                Height = 30,
+                Margin = new Padding(4, 0, 4, 0)
+            };
+            _saveReopenTestButton.Click += SingleOccurrenceSaveReopenTest;
+
+            var testButtonsPanel = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.RightToLeft,
+                WrapContents = false,
+                Margin = new Padding(0),
+                Padding = new Padding(0)
+            };
+            testButtonsPanel.Controls.Add(_saveReopenTestButton);
+            testButtonsPanel.Controls.Add(_singleReplaceTestButton);
+            testButtonsPanel.Controls.Add(_occurrenceListButton);
 
             readScopePanel.Controls.Add(readScopeLabel, 0, 0);
             readScopePanel.Controls.Add(_readScopeComboBox, 1, 0);
             readScopePanel.Controls.Add(_readScopeDescriptionLabel, 2, 0);
-            readScopePanel.Controls.Add(_occurrenceListButton, 3, 0);
-            readScopePanel.Controls.Add(_singleReplaceTestButton, 4, 0);
+            readScopePanel.SetColumnSpan(_readScopeDescriptionLabel, 2);
+            readScopePanel.Controls.Add(testButtonsPanel, 0, 1);
+            readScopePanel.SetColumnSpan(testButtonsPanel, 4);
             root.Controls.Add(readScopePanel, 0, 3);
 
             var logGroup = new GroupBox { Text = "作業紀錄", Dock = DockStyle.Fill };
@@ -510,6 +536,76 @@ namespace SEBatchReplace
                 UseWaitCursor = false;
                 _singleReplaceTestButton.Enabled = true;
                 AppendLog("========== 單一 occurrence 替換測試結束 ==========");
+            }
+        }
+
+
+        private void SingleOccurrenceSaveReopenTest(object sender, EventArgs e)
+        {
+            if (String.IsNullOrWhiteSpace(_folderTextBox.Text) || !Directory.Exists(_folderTextBox.Text))
+            {
+                MessageBox.Show(this, "請先選擇有效的組立根資料夾。", "尚未選擇資料夾", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            if (_assemblyList.SelectedIndex < 0)
+            {
+                MessageBox.Show(this, "請先選取已複製的測試用 .asm 檔案。", "尚未選取組立", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            if (_mappingList.SelectedIndex < 0 || _mappingList.SelectedIndex >= _mappings.Count)
+            {
+                MessageBox.Show(this, "請先選取一筆舊零件與新零件配對。", "尚未選取配對", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string relativePath = Convert.ToString(_assemblyList.SelectedItem);
+            string assemblyPath = Path.Combine(_folderTextBox.Text, relativePath);
+            ReplacementMapping mapping = _mappings[_mappingList.SelectedIndex];
+            if (!File.Exists(assemblyPath))
+            {
+                MessageBox.Show(this, "找不到選取的組立檔：" + assemblyPath, "檔案不存在", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            if (!File.Exists(mapping.NewPartPath))
+            {
+                MessageBox.Show(this, "找不到新零件檔案：" + mapping.NewPartPath, "新零件不存在", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            DialogResult confirmation = MessageBox.Show(this,
+                "這項測試會直接修改並儲存選取的組立檔，之後會關閉並重新開啟驗證。\r\n\r\n" +
+                "組立檔：" + assemblyPath + "\r\n舊零件：" + mapping.OldPartName +
+                "\r\n新零件：" + mapping.NewPartPath +
+                "\r\n\r\n請確認選取的是已複製的測試副本，不是正式組立檔。\r\n" +
+                "本次只替換一個符合條件的 occurrence；若符合數量不是剛好一個，程式會停止。\r\n\r\n是否繼續？",
+                "確認替換、儲存及重新開啟測試", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            if (confirmation != DialogResult.Yes) return;
+
+            _saveReopenTestButton.Enabled = false;
+            UseWaitCursor = true;
+            AppendLog("========== 開始單一 occurrence 替換＋儲存重開測試 ==========");
+            AppendLog("[測試組立] " + relativePath);
+            AppendLog("[替換配對] " + mapping.OldPartName + " → " + mapping.NewPartPath);
+            AppendLog("[安全設定] 僅處理一個 occurrence；本次會儲存選取的測試組立。");
+            try
+            {
+                IList<string> lines = SolidEdgeReader.ReplaceOneOccurrenceSaveAndReopenInBackground(
+                    assemblyPath, mapping.OldPartName, mapping.NewPartPath);
+                foreach (string line in lines) AppendLog(line);
+                MessageBox.Show(this,
+                    "替換、儲存及重新開啟測試已完成。\r\n請查看作業紀錄，確認重新開啟後的新零件路徑與關聯數量。",
+                    "儲存重開測試完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                AppendLog("[儲存重開測試失敗] " + GetExceptionDetails(ex).Replace(Environment.NewLine, " | "));
+                MessageBox.Show(this, ex.Message, "儲存重開測試失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                UseWaitCursor = false;
+                _saveReopenTestButton.Enabled = true;
+                AppendLog("========== 單一 occurrence 替換＋儲存重開測試結束 ==========");
             }
         }
 

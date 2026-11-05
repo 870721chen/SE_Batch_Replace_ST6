@@ -14,6 +14,7 @@ namespace SEBatchReplace
         private RadioButton _skipRadio;
         private RadioButton _stopRadio;
         private TextBox _logTextBox;
+        private ComboBox _readScopeComboBox;
         private readonly List<ReplacementMapping> _mappings = new List<ReplacementMapping>();
 
         public MainForm()
@@ -149,14 +150,25 @@ namespace SEBatchReplace
                 Height = 32
             };
             autoReadButton.Click += AutoReadSelectedAssembly;
+             _readScopeComboBox = new ComboBox
+            {
+                Width = 190,
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Margin = new Padding(4, 4, 8, 0)
+            };
+            _readScopeComboBox.Items.Add("主組立第一層（預設）");
+            _readScopeComboBox.Items.Add("完整階層");
+            _readScopeComboBox.SelectedIndex = 0;
+
             var executeHint = new Label
             {
-                Text = "需先啟動 Solid Edge，再讀取完整組立階層",
+                Text = "需先啟動 Solid Edge；讀取範圍可自行選擇",
                 AutoSize = true,
                 TextAlign = ContentAlignment.MiddleLeft,
                 Padding = new Padding(0, 8, 8, 0)
             };
             executePanel.Controls.Add(executeButton);
+            executePanel.Controls.Add(_readScopeComboBox);
             executePanel.Controls.Add(readButton);
             executePanel.Controls.Add(autoReadButton);
             executePanel.Controls.Add(executeHint);
@@ -167,7 +179,7 @@ namespace SEBatchReplace
             logGroup.Controls.Add(_logTextBox);
             root.Controls.Add(logGroup, 0, 4);
 
-            AppendLog("目前讀取組立及所有子組立的完整階層，不會修改或儲存任何組立或零件檔。");
+            AppendLog("可選擇讀取主組立第一層或完整階層；所有讀取均為唯讀，不會修改或儲存任何組立或零件檔。");
         }
 
         private void BrowseFolder(object sender, EventArgs e)
@@ -205,13 +217,15 @@ namespace SEBatchReplace
             try
             {
                 AppendLog("開始連接 Solid Edge，讀取目前作用中的組立結構……");
-                IList<string> occurrences = SolidEdgeReader.ReadActiveAssemblyOccurrences();
-                AppendLog("讀取完成：目前組立包含 " + occurrences.Count + " 個完整階層中的零件／子組立參照。");
+                bool includeNested = _readScopeComboBox.SelectedIndex == 1;
+                string scopeName = includeNested ? "完整階層" : "主組立第一層";
+                IList<string> occurrences = SolidEdgeReader.ReadActiveAssemblyOccurrences(includeNested);
+                AppendLog("讀取完成：" + scopeName + "共取得 " + occurrences.Count + " 個零件／子組立參照。");
                 foreach (string item in occurrences)
                     AppendLog(item);
 
                 MessageBox.Show(this,
-                    "讀取完成，共取得 " + occurrences.Count + " 個階層參照。\r\n詳細資料已列在作業紀錄。",
+                    "讀取完成（" + scopeName + "），共取得 " + occurrences.Count + " 個參照。\r\n詳細資料已列在作業紀錄。",
                     "組立結構讀取完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
@@ -243,15 +257,17 @@ namespace SEBatchReplace
             try
             {
                 AppendLog("開始自動開啟組立：" + relativePath);
-                IList<string> occurrences = SolidEdgeReader.OpenReadAndCloseAssembly(assemblyPath);
-                AppendLog("讀取完成：取得 " + occurrences.Count + " 個階層參照。");
+                bool includeNested = _readScopeComboBox.SelectedIndex == 1;
+                string scopeName = includeNested ? "完整階層" : "主組立第一層";
+                IList<string> occurrences = SolidEdgeReader.OpenReadAndCloseAssembly(assemblyPath, includeNested);
+                AppendLog("讀取完成（" + scopeName + "）：取得 " + occurrences.Count + " 個參照。");
                 foreach (string item in occurrences)
                     AppendLog(item);
 
                 AppendLog("自動開啟／讀取／關閉測試完成。原始檔未修改、未儲存。");
                 MessageBox.Show(this,
                     "測試完成。\r\n組立：" + relativePath +
-                    "\r\n完整階層參照數：" + occurrences.Count +
+                    "\r\n讀取範圍：" + scopeName + "\r\n參照數：" + occurrences.Count +
                     "\r\n\r\n若此文件原本未開啟，工具已在讀取後以不儲存方式關閉。\r\n若文件原本已開啟，工具會保留開啟狀態。",
                     "自動開啟測試完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }

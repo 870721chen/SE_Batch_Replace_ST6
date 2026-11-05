@@ -291,10 +291,11 @@ namespace SEBatchReplace
                     try
                     {
                         AsmReferenceScanResult result = AsmReferenceScanner.Scan(file, GetOldPartNames());
+                        AppendLog("[檔案] " + relative + "；格式辨識：" + result.FileFormat + "；檔案大小：" + result.FileLength + " bytes");
                         if (result.Matches.Count > 0)
                         {
                             hitFiles++;
-                            AppendLog("[命中] " + relative + "；格式辨識：" + result.FileFormat + "；檔案大小：" + result.FileLength + " bytes");
+                            AppendLog("[命中] " + relative);
                             foreach (AsmReferenceMatch match in result.Matches)
                                 AppendLog("  [參照文字] " + match.PartName + "；編碼：" + match.EncodingName +
                                     "；位元組位置：" + String.Join(", ", match.Offsets) +

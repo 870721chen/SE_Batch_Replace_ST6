@@ -544,16 +544,15 @@ namespace SEBatchReplace
                     throw new InvalidOperationException("測試組立目前已在 Solid Edge 中開啟。請先關閉它，再執行儲存重開測試。");
                 }
 
-                stage = "背景開啟測試組立";
-                document = documents.GetType().InvokeMember("Open",
-                    BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
-                    null, documents, new object[] { assemblyPath, (uint)8 });
+                stage = "一般文件模式開啟測試組立（不使用 NOWINDOW=8）";
+                document = OpenDocument(documents, assemblyPath);
                 if (document == null) throw new InvalidOperationException("Documents.Open 沒有回傳組立文件。");
                 documentOpened = true;
 
                 stage = "讀取主組立第一層 occurrences";
                 occurrences = GetProperty(document, "Occurrences");
                 int count = Convert.ToInt32(GetProperty(occurrences, "Count"));
+                output.Add("[開啟模式] 一般 Documents.Open（不使用 NOWINDOW=8）；Solid Edge 主視窗保持隱藏。");
                 output.Add("[組立] " + assemblyPath);
                 output.Add("[第一層 occurrence 數量] " + count);
 
@@ -622,7 +621,7 @@ namespace SEBatchReplace
 
                 stage = "儲存測試組立";
                 InvokeMethod(document, "Save", new object[0]);
-                output.Add("[儲存] AssemblyDocument.Save() 已呼叫。");
+                output.Add("[儲存] AssemblyDocument.Save() 成功。");
 
                 stage = "關閉已儲存的測試組立";
                 InvokeMethod(document, "Close", new object[] { false });
@@ -630,7 +629,7 @@ namespace SEBatchReplace
                 ReleaseComObject(document);
                 document = null;
 
-                stage = "重新背景開啟已儲存的測試組立";
+                stage = "以一般文件模式重新開啟已儲存的測試組立";
                 document = documents.GetType().InvokeMember("Open",
                     BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
                     null, documents, new object[] { assemblyPath, (uint)8 });

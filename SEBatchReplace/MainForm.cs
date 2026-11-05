@@ -40,14 +40,44 @@ namespace SEBatchReplace
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 18));
             Controls.Add(root);
 
-            var folderPanel = new Panel { Dock = DockStyle.Fill };
-            var folderLabel = new Label { Text = "組立資料夾（只掃描第一層 .asm）", AutoSize = true, Location = new Point(0, 0) };
-            _folderTextBox = new TextBox { Location = new Point(0, 25), Width = 820, Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right };
-            var browseButton = new Button { Text = "選擇資料夾", Location = new Point(830, 23), Width = 120, Anchor = AnchorStyles.Top | AnchorStyles.Right };
+            var folderPanel = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 2,
+                RowCount = 2,
+                Margin = new Padding(0),
+                Padding = new Padding(0)
+            };
+            folderPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            folderPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130F));
+            folderPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 22F));
+            folderPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+
+            var folderLabel = new Label
+            {
+                Text = "組立資料夾（只掃描第一層 .asm）",
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(0, 0, 0, 2)
+            };
+            _folderTextBox = new TextBox
+            {
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0, 2, 8, 0),
+                ReadOnly = true
+            };
+            var browseButton = new Button
+            {
+                Text = "選擇資料夾",
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0, 0, 0, 0)
+            };
             browseButton.Click += BrowseFolder;
-            folderPanel.Controls.Add(folderLabel);
-            folderPanel.Controls.Add(_folderTextBox);
-            folderPanel.Controls.Add(browseButton);
+
+            folderPanel.Controls.Add(folderLabel, 0, 0);
+            folderPanel.SetColumnSpan(folderLabel, 2);
+            folderPanel.Controls.Add(_folderTextBox, 0, 1);
+            folderPanel.Controls.Add(browseButton, 1, 1);
             root.Controls.Add(folderPanel, 0, 0);
 
             var assemblyGroup = new GroupBox { Text = "找到的組立檔", Dock = DockStyle.Fill };

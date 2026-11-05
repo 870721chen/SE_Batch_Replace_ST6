@@ -124,6 +124,120 @@ namespace SEBatchReplace
             }
         }
 
+
+        // Lists every first-level occurrence and marks an exact filename match.
+        // Read-only: no Replace call and no document save.
+        public static IList<string> ListFirstLevelOccurrencesInBackground(string assemblyPath, string oldPartName)
+        {
+            if (String.IsNullOrWhiteSpace(assemblyPath) || !File.Exists(assemblyPath))
+                throw new FileNotFoundException("找不到指定的測試組立檔。", assemblyPath);
+            if (String.IsNullOrWhiteSpace(oldPartName))
+                throw new ArgumentException("舊零件名稱不可空白。", "oldPartName");
+
+            string expectedName = Path.GetFileName(oldPartName.Trim());
+            if (!expectedName.EndsWith(".par", StringComparison.OrdinalIgnoreCase))
+                expectedName += ".par";
+
+            object application = null, documents = null, document = null, occurrences = null;
+            bool createdApplication = false, visibilityCaptured = false, originalVisible = true, documentOpened = false;
+            var output = new List<string>();
+            string stage = "連接或啟動 Solid Edge";
+            try
+            {
+                try { application = Marshal.GetActiveObject("SolidEdge.Application"); }
+                catch
+                {
+                    Type appType = Type.GetTypeFromProgID("SolidEdge.Application");
+                    if (appType == null) throw new InvalidOperationException("系統未註冊 SolidEdge.Application。");
+                    application = Activator.CreateInstance(appType);
+                    createdApplication = true;
+                }
+
+                originalVisible = Convert.ToBoolean(GetProperty(application, "Visible"));
+                visibilityCaptured = true;
+                SetProperty(application, "Visible", false);
+                documents = GetProperty(application, "Documents");
+
+                stage = "確認測試組立未開啟";
+                object alreadyOpen = FindOpenDocument(documents, assemblyPath);
+                if (alreadyOpen != null)
+                {
+                    ReleaseComObject(alreadyOpen);
+                    throw new InvalidOperationException("測試組立目前已在 Solid Edge 中開啟。請先關閉它，再執行唯讀診斷。");
+                }
+
+                stage = "背景開啟測試組立";
+                document = documents.GetType().InvokeMember("Open",
+                    BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
+                    null, documents, new object[] { assemblyPath, (uint)8 });
+                if (document == null) throw new InvalidOperationException("Documents.Open 沒有回傳組立文件。");
+                documentOpened = true;
+
+                stage = "讀取主組立第一層 occurrences";
+                occurrences = GetProperty(document, "Occurrences");
+                int count = Convert.ToInt32(GetProperty(occurrences, "Count"));
+                output.Add("[組立] " + assemblyPath);
+                output.Add("[比對目標] " + expectedName);
+                output.Add("[第一層數量] " + count);
+                int matchCount = 0;
+
+                for (int index = 1; index <= count; index++)
+                {
+                    object item = null;
+                    try
+                    {
+                        item = GetIndexedProperty(occurrences, "Item", new object[] { index });
+                        string name = Convert.ToString(GetProperty(item, "Name"));
+                        string path = Convert.ToString(GetProperty(item, "OccurrenceFileName"));
+                        bool subassembly = Convert.ToBoolean(GetProperty(item, "Subassembly"));
+                        string fileName = String.IsNullOrWhiteSpace(path) ? String.Empty : Path.GetFileName(path);
+                        bool match = !subassembly && String.Equals(fileName, expectedName, StringComparison.OrdinalIgnoreCase);
+                        if (match) matchCount++;
+                        output.Add("[Occurrence #" + index + "] " + (subassembly ? "[子組立]" : "[零件]") +
+                            "；Name=" + (String.IsNullOrWhiteSpace(name) ? "(空)" : name) +
+                            "；FileName=" + (String.IsNullOrWhiteSpace(fileName) ? "(空)" : fileName) +
+                            "；Path=" + (String.IsNullOrWhiteSpace(path) ? "(空)" : path) +
+                            "；Match=" + (match ? "YES" : "NO"));
+                    }
+                    finally { ReleaseComObject(item); }
+                }
+
+                output.Add("[比對結果] 完全符合檔名的第一層零件 occurrence：" + matchCount);
+                output.Add("[限制] 本診斷只列主組立第一層，不展開子組立；不修改、不儲存。");
+
+                stage = "關閉測試組立（不儲存）";
+                InvokeMethod(document, "Close", new object[] { false });
+                documentOpened = false;
+                output.Add("[完成] 已呼叫 Close(false)，未儲存。");
+                return output;
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("第一層 occurrence 唯讀診斷失敗。檔案：" + assemblyPath +
+                    "；失敗階段：" + stage + (documentOpened ? "；文件可能仍開啟，請檢查 Solid Edge。" : "") +
+                    "；原因：" + ex.Message, ex);
+            }
+            finally
+            {
+                ReleaseComObject(occurrences);
+                if (documentOpened && document != null)
+                {
+                    try { InvokeMethod(document, "Close", new object[] { false }); } catch { }
+                }
+                ReleaseComObject(document);
+                ReleaseComObject(documents);
+                if (createdApplication && application != null)
+                {
+                    try { InvokeMethod(application, "Quit", new object[0]); } catch { }
+                }
+                else if (visibilityCaptured && application != null)
+                {
+                    try { SetProperty(application, "Visible", originalVisible); } catch { }
+                }
+                ReleaseComObject(application);
+            }
+        }
+
         // Replaces exactly one matching first-level part occurrence in memory only.
         // The test assembly is always closed with SaveChanges=false.
         public static IList<string> ReplaceOneOccurrenceInBackground(string assemblyPath, string oldPartName, string newPartPath)

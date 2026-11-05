@@ -305,7 +305,7 @@ namespace SEBatchReplace
             {
                 if (!File.Exists(mapping.NewPartPath))
                 {
-                    MessageBox.Show(this, "找不到配對中的新零件檔案：\\r\\n" + mapping.NewPartPath, "新零件檔案不存在", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show(this, "找不到配對中的新零件檔案：\r\n" + mapping.NewPartPath, "新零件檔案不存在", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
             }
@@ -409,11 +409,11 @@ namespace SEBatchReplace
             AppendLog("預覽結束：組立成功讀取 " + scannedAssemblies + "；讀取失敗 " + failedAssemblies +
                 "；命中實例總數 " + totalMatches + "。未執行任何替換。");
             MessageBox.Show(this,
-                "替換預覽完成。\\r\\n讀取模式：" + scopeName +
-                "\\r\\n成功讀取組立：" + scannedAssemblies +
-                "\\r\\n讀取失敗：" + failedAssemblies +
-                "\\r\\n命中實例總數：" + totalMatches +
-                "\\r\\n\\r\\n各配對的命中數及詳細位置請查看作業紀錄。\\r\\n本次沒有修改或儲存任何檔案。",
+                "替換預覽完成。\r\n讀取模式：" + scopeName +
+                "\r\n成功讀取組立：" + scannedAssemblies +
+                "\r\n讀取失敗：" + failedAssemblies +
+                "\r\n命中實例總數：" + totalMatches +
+                "\r\n\r\n各配對的命中數及詳細位置請查看作業紀錄。\r\n本次沒有修改或儲存任何檔案。",
                 "替換預覽完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 

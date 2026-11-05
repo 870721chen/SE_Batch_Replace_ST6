@@ -4,9 +4,11 @@ Solid Edge ST6 批次零件替換工具（Windows 桌面程式）。
 
 ## 目前階段
 
-此 Repository 先建立可由 GitHub Actions 編譯的 Windows Forms 專案骨架。現階段包含資料夾掃描、組立檔清單、手動新舊零件配對介面與錯誤處理策略選擇；**尚未執行 Solid Edge 零件替換**。
+目前程式暫時收斂為 **Revision Manager 全資料夾唯讀讀取測試**。使用者選擇組立根資料夾後，程式會遞迴掃描根目錄及所有子資料夾中的 .asm，再逐一透過 Revision Manager 嘗試讀取每個組立的 LinkedDocuments 直接連結清單。
 
-Solid Edge COM 已加入唯讀組立結構讀取，使用者可自行選擇「主組立第一層」（預設，只列出子組立、不展開）或「完整階層」（透過 Occurrence 的 Subassembly 與 OccurrenceDocument 逐層讀取子組立）。另已加入「替換預覽（Dry Run）」：遞迴掃描根資料夾及所有子資料夾中的 `.asm`，依選定的讀取範圍比對手動設定的舊零件檔名，列出命中位置、組立檔及實例數量。預覽只讀取與比對，不執行替換、不儲存檔案；此功能仍須在 Solid Edge ST6 實機測試。尚未實作零件替換，也不代表關聯保留／復原能力已驗證。
+單一組立讀取失敗時會記錄錯誤並繼續下一個組立。測試只讀取連結資訊，不呼叫 Save、Replace 或其他連結修改方法，不會修改或儲存組立與零件檔。
+
+目前介面保留資料夾選擇、組立檔清單、Revision Manager 全資料夾讀取測試及作業紀錄。其他舊測試、替換預覽、零件配對與批次替換介面暫時移除，待讀取方案驗證後再逐步恢復需要的功能。
 
 ## 目標環境
 
@@ -19,29 +21,17 @@ Solid Edge COM 已加入唯讀組立結構讀取，使用者可自行選擇「�
 
 > 目前以 COM late binding 為方向，避免 GitHub Runner 因未安裝 Solid Edge ST6 而無法編譯。真正連線與操作仍須在安裝 ST6 的電腦測試。
 
-## 使用者已確認的操作規格
-
-1. 使用者選擇一個資料夾。
-2. 只掃描該資料夾第一層的 `.asm`，不遞迴子資料夾。
-3. 使用者手動指定舊 `.par` 與新 `.par` 的對應。
-4. 替換必須盡可能保留原有組立關係。
-5. 關聯失效時，執行前由使用者選擇：
-   - 跳過該次替換並繼續。
-   - 回復該次嘗試並立即停止。
-6. 記錄每個組立檔、零件、結果與原因。
-
-## 安全原則
-
-- 不會在未驗證 ST6 API 前假設替換可原子化或可可靠回復。
-- 正式批次作業應優先評估工作副本／暫存工作區，避免直接破壞來源檔。
-- 任何無法確認的關聯狀態都不得回報為成功。
-- 開發階段不會自動覆寫使用者原始組立檔。
-
 ## Revision Manager 讀取測試（實驗功能）
 
-新增獨立的「Revision Manager 讀取測試」按鈕。先在組立清單選取一個 .asm，再執行測試。程式透過 RevisionManager.Application 開啟該組立，讀取 LinkedDocuments 的直接連結清單；不呼叫 Save、Replace 或其他連結修改方法，也不會呼叫 Solid Edge 主程式的 Documents.Open。
+1. 選擇包含組立檔的根資料夾。
+2. 程式遞迴列出所有子資料夾中的 .asm。
+3. 點選「Revision Manager 讀取測試（全部組立）」；不需要選取清單中的特定組立。
+4. 程式逐一讀取所有組立的 LinkedDocuments，並記錄成功、失敗及回傳連結資料。
+5. 單一檔案失敗不會中止整批讀取。
 
-此功能目前是實驗性讀取測試，尚未由 Solid Edge ST6 實機驗證，也尚未遞迴展開子組立。請先使用測試資料副本。測試結果需與「自動開啟組立測試」讀取結果逐筆比較，確認完整性與速度後，才考慮用於大量 .asm 預覽。
+**重要限制：** 此功能仍是實驗性測試。Revision Manager 的 COM ProgID、Open、LinkedDocuments、Item、FullName 等成員尚未完整確認其在 Solid Edge ST6 環境中的行為。直接連結清單也不等於組立 occurrence 實例清單；同一零件的多個 instance 可能只呈現一筆連結，且目前尚未遞迴展開子組立。測試結果必須與已知組立結構比對，才能判斷完整性。
+
+請先使用測試資料副本。程式不會呼叫 Save、Replace 或其他連結修改方法，也不會主動修改或儲存任何檔案。
 
 ## 編譯
 
@@ -50,11 +40,12 @@ GitHub Actions 需由使用者手動觸發編譯：
 1. 開啟 Repository 的 **Actions**。
 2. 選擇 **Build SE Batch Replace**。
 3. 等待工作完成。
-4. 在成功的執行紀錄底部下載 `SEBatchReplace-x64` Artifact。
+4. 在成功的執行紀錄底部下載 SEBatchReplace-x64 Artifact。
 
 ## 本機測試需求
 
 在 Windows 7 SP1 x64 電腦上：
+
 - 安裝 Solid Edge ST6。
 - 安裝 .NET Framework 4.8。
 - 使用 x64 版本執行程式。
@@ -62,4 +53,4 @@ GitHub Actions 需由使用者手動觸發編譯：
 
 ## 版本狀態
 
-目前具備組立階層唯讀讀取與操作介面；真正的 Solid Edge 批次零件替換功能尚未實作。
+目前只保留 Revision Manager 全資料夾唯讀讀取測試介面。真正的 Solid Edge 批次零件替換功能尚未實作；Revision Manager 讀取結果也尚未完成 ST6 實機驗證。

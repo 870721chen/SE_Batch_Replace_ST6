@@ -8,6 +8,122 @@ namespace SEBatchReplace
 {
     public static class SolidEdgeReader
     {
+
+        // Reads runtime IDispatch type information for the assembly document,
+        // its Occurrences collection, and one Occurrence. This method never edits or saves.
+        public static IList<string> ProbeAssemblyApiInBackground(string filePath)
+        {
+            if (String.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+                throw new FileNotFoundException("找不到指定的組立檔。", filePath);
+
+            object application = null;
+            object documents = null;
+            object document = null;
+            object occurrences = null;
+            object occurrence = null;
+            bool createdApplication = false;
+            bool originalVisible = true;
+            bool visibilityCaptured = false;
+            bool documentOpened = false;
+            var output = new List<string>();
+            string stage = "連接或啟動 Solid Edge";
+
+            try
+            {
+                try { application = Marshal.GetActiveObject("SolidEdge.Application"); }
+                catch
+                {
+                    Type appType = Type.GetTypeFromProgID("SolidEdge.Application");
+                    if (appType == null)
+                        throw new InvalidOperationException("系統未註冊 SolidEdge.Application。");
+                    application = Activator.CreateInstance(appType);
+                    createdApplication = true;
+                }
+
+                stage = "讀取原始顯示狀態";
+                originalVisible = Convert.ToBoolean(GetProperty(application, "Visible"));
+                visibilityCaptured = true;
+                SetProperty(application, "Visible", false);
+
+                stage = "取得 Documents";
+                documents = GetProperty(application, "Documents");
+                stage = "確認組立未開啟";
+                object alreadyOpen = FindOpenDocument(documents, filePath);
+                if (alreadyOpen != null)
+                {
+                    ReleaseComObject(alreadyOpen);
+                    throw new InvalidOperationException("測試組立目前已開啟。請先關閉該組立，再執行 API 診斷。");
+                }
+
+                stage = "背景開啟組立";
+                document = documents.GetType().InvokeMember(
+                    "Open",
+                    BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
+                    null, documents, new object[] { filePath, (uint)8 });
+                if (document == null)
+                    throw new InvalidOperationException("Documents.Open 沒有回傳文件物件。");
+                documentOpened = true;
+
+                output.Add("[TypeInfo] AssemblyDocument runtime object");
+                output.AddRange(ComTypeInfoInspector.Describe(document, "AssemblyDocument"));
+                stage = "取得 Occurrences";
+                occurrences = GetProperty(document, "Occurrences");
+                output.Add("[TypeInfo] Occurrences runtime object");
+                output.AddRange(ComTypeInfoInspector.Describe(occurrences, "Occurrences"));
+
+                int count = Convert.ToInt32(GetProperty(occurrences, "Count"));
+                output.Add("[資訊] 主組立第一層 occurrence 數量：" + count);
+                if (count > 0)
+                {
+                    stage = "取得第一個 Occurrence";
+                    occurrence = GetIndexedProperty(occurrences, "Item", new object[] { 1 });
+                    output.Add("[TypeInfo] Occurrence runtime object（第一個項目）");
+                    output.AddRange(ComTypeInfoInspector.Describe(occurrence, "Occurrence"));
+                }
+                else
+                {
+                    output.Add("[資訊] 組立沒有第一層 occurrence，略過 Occurrence TypeInfo。");
+                }
+
+                stage = "關閉組立（不儲存）";
+                InvokeMethod(document, "Close", new object[] { false });
+                documentOpened = false;
+                output.Add("[完成] 背景組立已關閉，未儲存。");
+                return output;
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    "Solid Edge COM API 診斷失敗。檔案：" + filePath +
+                    "；失敗階段：" + stage +
+                    (documentOpened ? "；文件可能仍留在 Solid Edge，請檢查並手動關閉。" : String.Empty) +
+                    "；原因：" + ex.Message, ex);
+            }
+            finally
+            {
+                ReleaseComObject(occurrence);
+                ReleaseComObject(occurrences);
+                if (documentOpened && document != null)
+                {
+                    try { InvokeMethod(document, "Close", new object[] { false }); }
+                    catch { }
+                }
+                ReleaseComObject(document);
+                ReleaseComObject(documents);
+                if (createdApplication && application != null)
+                {
+                    try { InvokeMethod(application, "Quit", new object[0]); }
+                    catch { }
+                }
+                else if (visibilityCaptured && application != null)
+                {
+                    try { SetProperty(application, "Visible", originalVisible); }
+                    catch { }
+                }
+                ReleaseComObject(application);
+            }
+        }
+
         public static IList<string> ReadActiveAssemblyOccurrences(bool includeNested)
         {
             object application = null;

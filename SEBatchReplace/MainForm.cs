@@ -190,7 +190,7 @@ namespace SEBatchReplace
             _backgroundOpenButton.Click += BackgroundOpenSelectedAssembly;
             var hint = new Label
             {
-                Text = "唯讀二進位掃描；初篩結果需與 Solid Edge 讀取結果比對。",
+                Text = "唯讀初篩；確認後才進行替換。",
                 AutoSize = true,
                 Padding = new Padding(8, 8, 0, 0)
             };

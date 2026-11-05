@@ -136,6 +136,13 @@ namespace SEBatchReplace
                 Height = 32,
                 Enabled = false
             };
+            var previewButton = new Button
+            {
+                Text = "替換預覽（Dry Run）",
+                Width = 160,
+                Height = 32
+            };
+            previewButton.Click += PreviewReplacements;
             var readButton = new Button
             {
                 Text = "讀取目前組立結構",
@@ -168,6 +175,7 @@ namespace SEBatchReplace
                 Padding = new Padding(0, 8, 8, 0)
             };
             executePanel.Controls.Add(executeButton);
+            executePanel.Controls.Add(previewButton);
             executePanel.Controls.Add(_readScopeComboBox);
             executePanel.Controls.Add(readButton);
             executePanel.Controls.Add(autoReadButton);
@@ -277,6 +285,136 @@ namespace SEBatchReplace
                 AppendLog("自動開啟測試失敗：" + details);
                 MessageBox.Show(this, details, "自動開啟測試失敗（診斷資訊）", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
+        }
+
+        private void PreviewReplacements(object sender, EventArgs e)
+        {
+            if (String.IsNullOrWhiteSpace(_folderTextBox.Text) || !Directory.Exists(_folderTextBox.Text))
+            {
+                MessageBox.Show(this, "請先選擇有效的組立根資料夾。", "尚未選擇資料夾", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (_mappings.Count == 0)
+            {
+                MessageBox.Show(this, "請先新增至少一組舊零件與新零件配對。", "尚未建立配對", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            foreach (ReplacementMapping mapping in _mappings)
+            {
+                if (!File.Exists(mapping.NewPartPath))
+                {
+                    MessageBox.Show(this, "找不到配對中的新零件檔案：\\r\\n" + mapping.NewPartPath, "新零件檔案不存在", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+            }
+
+            IList<string> assemblyFiles;
+            try
+            {
+                assemblyFiles = FolderScanner.GetAssemblyFiles(_folderTextBox.Text);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "組立資料夾掃描失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            if (assemblyFiles.Count == 0)
+            {
+                MessageBox.Show(this, "指定資料夾及其子資料夾中沒有找到 .asm 檔案。", "沒有組立檔", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var mappingByOldName = new Dictionary<string, ReplacementMapping>(StringComparer.OrdinalIgnoreCase);
+            var matchCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (ReplacementMapping mapping in _mappings)
+            {
+                mappingByOldName.Add(mapping.OldPartName, mapping);
+                matchCounts.Add(mapping.OldPartName, 0);
+            }
+
+            bool includeNested = _readScopeComboBox.SelectedIndex == 1;
+            string scopeName = includeNested ? "完整階層" : "主組立第一層";
+            string rootPath = _folderTextBox.Text.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            int scannedAssemblies = 0;
+            int failedAssemblies = 0;
+            int totalMatches = 0;
+
+            AppendLog("========== 開始替換預覽（Dry Run）==========");
+            AppendLog("掃描範圍：根資料夾及所有子資料夾；組立檔數：" + assemblyFiles.Count +
+                "；讀取模式：" + scopeName + "；配對數：" + _mappings.Count + "。");
+            AppendLog("此階段只讀取並比對，不會執行替換，也不會儲存任何組立或零件檔。");
+
+            UseWaitCursor = true;
+            try
+            {
+                foreach (string assemblyPath in assemblyFiles)
+                {
+                    string relativeAssemblyPath = assemblyPath.Substring(rootPath.Length)
+                        .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                    try
+                    {
+                        IList<string> occurrences = SolidEdgeReader.OpenReadAndCloseAssembly(assemblyPath, includeNested);
+                        scannedAssemblies++;
+                        int assemblyMatches = 0;
+
+                        foreach (string occurrenceLine in occurrences)
+                        {
+                            int separator = occurrenceLine.LastIndexOf(" | ", StringComparison.Ordinal);
+                            if (separator < 0 || separator + 3 >= occurrenceLine.Length)
+                                continue;
+
+                            string occurrencePath = occurrenceLine.Substring(separator + 3).Trim();
+                            if (String.IsNullOrWhiteSpace(occurrencePath) || occurrencePath.StartsWith("("))
+                                continue;
+
+                            string oldPartName = Path.GetFileName(occurrencePath);
+                            ReplacementMapping mapping;
+                            if (!mappingByOldName.TryGetValue(oldPartName, out mapping))
+                                continue;
+
+                            assemblyMatches++;
+                            totalMatches++;
+                            matchCounts[mapping.OldPartName]++;
+                            AppendLog("[命中] 組立：" + relativeAssemblyPath +
+                                "；參照：" + occurrenceLine.Trim() +
+                                "；新零件：" + Path.GetFileName(mapping.NewPartPath));
+                        }
+
+                        AppendLog("[組立完成] " + relativeAssemblyPath +
+                            "；讀取參照：" + occurrences.Count + "；命中：" + assemblyMatches);
+                    }
+                    catch (Exception ex)
+                    {
+                        failedAssemblies++;
+                        AppendLog("[組立讀取失敗] " + relativeAssemblyPath + "；" + GetExceptionDetails(ex).Replace(Environment.NewLine, " | "));
+                    }
+                }
+            }
+            finally
+            {
+                UseWaitCursor = false;
+            }
+
+            AppendLog("---------- 配對統計 ----------");
+            foreach (ReplacementMapping mapping in _mappings)
+            {
+                int count = matchCounts[mapping.OldPartName];
+                AppendLog((count > 0 ? "[已命中] " : "[未命中] ") + mapping.OldPartName +
+                    " → " + Path.GetFileName(mapping.NewPartPath) + "；實例數：" + count);
+            }
+
+            AppendLog("預覽結束：組立成功讀取 " + scannedAssemblies + "；讀取失敗 " + failedAssemblies +
+                "；命中實例總數 " + totalMatches + "。未執行任何替換。");
+            MessageBox.Show(this,
+                "替換預覽完成。\\r\\n讀取模式：" + scopeName +
+                "\\r\\n成功讀取組立：" + scannedAssemblies +
+                "\\r\\n讀取失敗：" + failedAssemblies +
+                "\\r\\n命中實例總數：" + totalMatches +
+                "\\r\\n\\r\\n各配對的命中數及詳細位置請查看作業紀錄。\\r\\n本次沒有修改或儲存任何檔案。",
+                "替換預覽完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private static string GetExceptionDetails(Exception exception)

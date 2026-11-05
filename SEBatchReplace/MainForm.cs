@@ -32,13 +32,12 @@ namespace SEBatchReplace
             root.Dock = DockStyle.Fill;
             root.Padding = new Padding(12);
             root.ColumnCount = 1;
-            root.RowCount = 6;
+            root.RowCount = 5;
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
-            root.RowStyles.Add(new RowStyle(SizeType.Percent, 48));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 34));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 31));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
-            root.RowStyles.Add(new RowStyle(SizeType.Percent, 18));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 35));
             Controls.Add(root);
 
             var folderPanel = new TableLayoutPanel
@@ -101,14 +100,26 @@ namespace SEBatchReplace
             mappingLayout.Controls.Add(_mappingList, 0, 0);
             mappingLayout.Controls.Add(mappingButtons, 1, 0);
             mappingGroup.Controls.Add(mappingLayout);
-            root.Controls.Add(mappingGroup, 0, 2);
 
             var policyGroup = new GroupBox { Text = "遇到關聯失效時的處理方式（執行前選擇）", Dock = DockStyle.Fill };
             _skipRadio = new RadioButton { Text = "回復該次嘗試、跳過並繼續後續替換", AutoSize = true, Location = new Point(12, 22), Checked = true };
             _stopRadio = new RadioButton { Text = "回復該次嘗試、立即停止批次作業", AutoSize = true, Location = new Point(12, 46) };
             policyGroup.Controls.Add(_skipRadio);
             policyGroup.Controls.Add(_stopRadio);
-            root.Controls.Add(policyGroup, 0, 3);
+
+            var configurationPanel = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 2,
+                RowCount = 1,
+                Margin = new Padding(0),
+                Padding = new Padding(0)
+            };
+            configurationPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            configurationPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            configurationPanel.Controls.Add(mappingGroup, 0, 0);
+            configurationPanel.Controls.Add(policyGroup, 1, 0);
+            root.Controls.Add(configurationPanel, 0, 2);
 
             var executePanel = new FlowLayoutPanel
             {
@@ -149,12 +160,12 @@ namespace SEBatchReplace
             executePanel.Controls.Add(readButton);
             executePanel.Controls.Add(autoReadButton);
             executePanel.Controls.Add(executeHint);
-            root.Controls.Add(executePanel, 0, 4);
+            root.Controls.Add(executePanel, 0, 3);
 
             var logGroup = new GroupBox { Text = "作業紀錄", Dock = DockStyle.Fill };
             _logTextBox = new TextBox { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical };
             logGroup.Controls.Add(_logTextBox);
-            root.Controls.Add(logGroup, 0, 5);
+            root.Controls.Add(logGroup, 0, 4);
 
             AppendLog("目前僅讀取目前作用中的組立結構，不會修改或儲存任何組立或零件檔。");
         }

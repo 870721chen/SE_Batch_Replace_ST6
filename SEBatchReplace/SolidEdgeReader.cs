@@ -630,9 +630,7 @@ namespace SEBatchReplace
                 document = null;
 
                 stage = "以一般文件模式重新開啟已儲存的測試組立";
-                document = documents.GetType().InvokeMember("Open",
-                    BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
-                    null, documents, new object[] { assemblyPath, (uint)8 });
+                document = OpenDocument(documents, assemblyPath);
                 if (document == null) throw new InvalidOperationException("重新開啟時 Documents.Open 沒有回傳組立文件。");
                 documentOpened = true;
 

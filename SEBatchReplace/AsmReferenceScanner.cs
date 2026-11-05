@@ -38,12 +38,41 @@ namespace SEBatchReplace
         private static readonly byte[] CompoundFileSignature =
             new byte[] { 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1 };
 
+        private sealed class SearchState
+        {
+            public string PartName;
+            public string EncodingName;
+            public byte[] Pattern;
+            public int[] Prefix;
+            public int Matched;
+            public IList<long> Offsets = new List<long>();
+            public bool Truncated;
+        }
+
         public static AsmReferenceScanResult Scan(string filePath, IList<string> partNames)
         {
             if (String.IsNullOrWhiteSpace(filePath))
                 throw new ArgumentException("組立檔路徑不可空白。", "filePath");
 
             var result = new AsmReferenceScanResult();
+            var searches = new List<SearchState>();
+
+            if (partNames != null)
+            {
+                foreach (string partName in partNames)
+                {
+                    if (String.IsNullOrWhiteSpace(partName))
+                        continue;
+
+                    string normalized = Path.GetFileName(partName.Trim());
+                    byte[] ascii = TryGetAsciiBytes(normalized);
+                    if (ascii != null)
+                        searches.Add(CreateSearch(normalized, "ASCII", ascii));
+
+                    searches.Add(CreateSearch(normalized, "UTF-16LE", Encoding.Unicode.GetBytes(normalized)));
+                }
+            }
+
             using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
             {
                 result.FileLength = stream.Length;
@@ -53,34 +82,54 @@ namespace SEBatchReplace
                     ? "OLE/CFB Compound File"
                     : "非標準 OLE/CFB 簽章（或檔案不足 8 bytes）";
 
-                if (partNames == null)
-                    return result;
-
-                foreach (string partName in partNames)
+                stream.Position = 0;
+                byte[] buffer = new byte[65536];
+                long position = 0;
+                int read;
+                while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
                 {
-                    if (String.IsNullOrWhiteSpace(partName))
-                        continue;
-
-                    string normalized = Path.GetFileName(partName.Trim());
-                    byte[] ascii = TryGetAsciiBytes(normalized);
-                    if (ascii != null)
+                    for (int i = 0; i < read; i++, position++)
                     {
-                        IList<long> offsets;
-                        bool truncated;
-                        FindOffsets(stream, ascii, out offsets, out truncated);
-                        if (offsets.Count > 0)
-                            result.Matches.Add(new AsmReferenceMatch(normalized, "ASCII", offsets, truncated));
-                    }
+                        byte current = FoldAscii(buffer[i]);
+                        foreach (SearchState state in searches)
+                        {
+                            while (state.Matched > 0 && current != FoldAscii(state.Pattern[state.Matched]))
+                                state.Matched = state.Prefix[state.Matched - 1];
 
-                    byte[] unicode = Encoding.Unicode.GetBytes(normalized);
-                    IList<long> unicodeOffsets;
-                    bool unicodeTruncated;
-                    FindOffsets(stream, unicode, out unicodeOffsets, out unicodeTruncated);
-                    if (unicodeOffsets.Count > 0)
-                        result.Matches.Add(new AsmReferenceMatch(normalized, "UTF-16LE", unicodeOffsets, unicodeTruncated));
+                            if (current == FoldAscii(state.Pattern[state.Matched]))
+                                state.Matched++;
+
+                            if (state.Matched == state.Pattern.Length)
+                            {
+                                if (state.Offsets.Count < 10)
+                                    state.Offsets.Add(position - state.Pattern.Length + 1);
+                                else
+                                    state.Truncated = true;
+                                state.Matched = state.Prefix[state.Matched - 1];
+                            }
+                        }
+                    }
                 }
             }
+
+            foreach (SearchState state in searches)
+            {
+                if (state.Offsets.Count > 0)
+                    result.Matches.Add(new AsmReferenceMatch(state.PartName, state.EncodingName, state.Offsets, state.Truncated));
+            }
+
             return result;
+        }
+
+        private static SearchState CreateSearch(string partName, string encodingName, byte[] pattern)
+        {
+            return new SearchState
+            {
+                PartName = partName,
+                EncodingName = encodingName,
+                Pattern = pattern,
+                Prefix = BuildPrefix(pattern)
+            };
         }
 
         private static byte[] TryGetAsciiBytes(string value)
@@ -99,40 +148,6 @@ namespace SEBatchReplace
                 if (left[i] != right[i])
                     return false;
             return true;
-        }
-
-        private static void FindOffsets(Stream stream, byte[] pattern, out IList<long> offsets, out bool truncated)
-        {
-            offsets = new List<long>();
-            truncated = false;
-            if (pattern == null || pattern.Length == 0)
-                return;
-
-            int[] prefix = BuildPrefix(pattern);
-            int matched = 0;
-            long position = 0;
-            byte[] buffer = new byte[65536];
-            stream.Position = 0;
-            int read;
-            while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
-            {
-                for (int i = 0; i < read; i++, position++)
-                {
-                    byte current = FoldAscii(buffer[i]);
-                    while (matched > 0 && current != FoldAscii(pattern[matched]))
-                        matched = prefix[matched - 1];
-                    if (current == FoldAscii(pattern[matched]))
-                        matched++;
-                    if (matched == pattern.Length)
-                    {
-                        if (offsets.Count < 10)
-                            offsets.Add(position - pattern.Length + 1);
-                        else
-                            truncated = true;
-                        matched = prefix[matched - 1];
-                    }
-                }
-            }
         }
 
         private static int[] BuildPrefix(byte[] pattern)
